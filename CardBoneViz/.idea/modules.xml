@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/CardBoneViz.iml" filepath="$PROJECT_DIR$/CardBoneViz.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/cardboardarlibrary/cardboardarlibrary.iml" filepath="$PROJECT_DIR$/cardboardarlibrary/cardboardarlibrary.iml" />
       <module fileurl="file://$PROJECT_DIR$/gvr-base/gvr-base.iml" filepath="$PROJECT_DIR$/gvr-base/gvr-base.iml" />
       <module fileurl="file://$PROJECT_DIR$/gvr-common/gvr-common.iml" filepath="$PROJECT_DIR$/gvr-common/gvr-common.iml" />
       <module fileurl="file://$PROJECT_DIR$/openCVLibrary310/openCVLibrary310.iml" filepath="$PROJECT_DIR$/openCVLibrary310/openCVLibrary310.iml" />

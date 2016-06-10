@@ -1,2 +1,2 @@
-include ':app', ':gvr-base', ':gvr-common'
+include ':app', ':gvr-base', ':gvr-common', ':cardboardarlibrary'
 include ':openCVLibrary310'
