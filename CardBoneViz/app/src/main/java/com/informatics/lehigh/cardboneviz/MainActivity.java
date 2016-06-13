@@ -143,7 +143,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     }
 
     @Override
-    public void onFinishFrame(Viewport viewport) {
+    public void onFinishFrame(Viewport viewport) {}
 
+    /**
+     * Called when the Cardboard trigger is pulled.
+     */
+    @Override
+    public void onCardboardTrigger() {
+        Log.i(TAG, "onCardboardTrigger");
     }
 }
