@@ -1,9 +1,7 @@
 package com.informatics.lehigh.cardboneviz;
 
 import android.content.res.Resources;
-import android.graphics.Camera;
 import android.hardware.camera2.CameraAccessException;
-import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
@@ -16,13 +14,9 @@ import com.google.vr.sdk.base.HeadTransform;
 import com.google.vr.sdk.base.Viewport;
 
 import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 import com.informatics.lehigh.cardboardarlibrary.StereoCamera;
 import com.informatics.lehigh.cardboardarlibrary.GLUtil;
-
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 public class MainActivity extends GvrActivity implements GvrView.StereoRenderer {
 
@@ -98,9 +92,24 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     @Override
     public void onSurfaceCreated(EGLConfig eglConfig) {
         Log.i(TAG, "onSurfaceCreated");
-        GLES20.glClearColor(0.1f, 0.1f, 0.1f, 0.5f); // Dark background so text shows up well.
+        GLES20.glClearColor(0.1f, 0.1f, 0.1f, 0.5f);
 
         m_stereoCam.initRenderer();
+
+        SurfParser surfParse = new SurfParser(getResources().openRawResource(R.raw.data1));
+        surfParse.parse();
+        float [] vertices = surfParse.getVertices();
+        float [] normals = surfParse.getNormals();
+        int [] indices = surfParse.getIndices();
+
+        Log.d("NUM VERTS", String.valueOf(surfParse.getNumVerts()));
+        Log.d("NUM TRIS", String.valueOf(surfParse.getNumTris()));
+        Log.d("VERTS1", "(" + String.valueOf(vertices[0]) + ", " + String.valueOf(vertices[1]) + ", " + String.valueOf(vertices[2]) + ")");
+        Log.d("NORMS1", "(" + String.valueOf(normals[0]) + ", " + String.valueOf(normals[1]) + ", " + String.valueOf(normals[2]) + ")");
+        Log.d("INDICES1", "(" + String.valueOf(indices[0]) + ", " + String.valueOf(indices[1]) + ", " + String.valueOf(indices[2]) + ")");
+        Log.d("VERTS_LAST", "(" + String.valueOf(vertices[(surfParse.getNumVerts()-1)*3]) + ", " + String.valueOf(vertices[(surfParse.getNumVerts()-1)*3 + 1]) + ", " + String.valueOf(vertices[(surfParse.getNumVerts()-1)*3 + 2]) + ")");
+        Log.d("NORMS_LAST", "(" + String.valueOf(normals[(surfParse.getNumVerts()-1)*3]) + ", " + String.valueOf(normals[(surfParse.getNumVerts()-1)*3 + 1]) + ", " + String.valueOf(normals[(surfParse.getNumVerts()-1)*3 + 2]) + ")");
+        Log.d("INDICES_LAST", "(" + String.valueOf(indices[(surfParse.getNumTris()-1)*3]) + ", " + String.valueOf(indices[(surfParse.getNumTris()-1)*3 + 1]) + ", " + String.valueOf(indices[(surfParse.getNumTris()-1)*3 + 2]) + ")");
 
         m_glutil.checkGLError("onSurfaceCreated");
     }
