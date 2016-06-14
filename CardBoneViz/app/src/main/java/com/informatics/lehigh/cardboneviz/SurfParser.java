@@ -3,8 +3,6 @@ package com.informatics.lehigh.cardboneviz;
 import android.util.Log;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -26,7 +24,7 @@ public class SurfParser {
 
     private float [] vertices;
     private float [] normals;
-    private int [] indices;
+    private short [] indices;
 
     /**
      * Constructor for SURF parser.
@@ -69,7 +67,7 @@ public class SurfParser {
                             this.readGeometry(br, nVerts);
                         } else if (tokens[0].trim().equals("TOPOLOGY")) {
                             nTris = Integer.parseInt(tokens[1].trim());
-                            indices = new int[3 * nTris];
+                            indices = new short[3 * nTris];
                             // parse the topology data
                             this.readTopology(br, nTris);
                         }
@@ -138,7 +136,7 @@ public class SurfParser {
                 String line = br.readLine();
                 String [] tokens = line.split(" ");
                 // get indices on this line
-                int [] ind = {Integer.parseInt(tokens[0]), Integer.parseInt(tokens[1]), Integer.parseInt(tokens[2])};
+                short [] ind = {Short.parseShort(tokens[0]), Short.parseShort(tokens[1]), Short.parseShort(tokens[2])};
                 // add it to all vertices and normals
                 indices[i * 3] = ind[0];
                 indices[i * 3 + 1] = ind[1];
@@ -167,7 +165,7 @@ public class SurfParser {
         return normals;
     }
 
-    public int[] getIndices() {
+    public short[] getIndices() {
         return indices;
     }
 }
