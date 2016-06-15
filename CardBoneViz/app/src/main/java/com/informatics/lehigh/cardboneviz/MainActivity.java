@@ -54,6 +54,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     //
     /** Model matrix for bone */
     private float[] mModelBone;
+    /** Matrix that translates bone model to about origin and scales to meters */
+    private float[] mBoneNorm;
     /** View matrix */
     private float[] mView;
     /** ModelView matrix */
@@ -99,10 +101,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         super.onCreate(savedInstanceState);
 
         mModelBone = new float[16];
+        mBoneNorm = new float[16];
         mView = new float[16];
         mModelView = new float[16];
         mModelViewProjection = new float[16];
         mCamera = new float[16];
+        Matrix.setIdentityM(mModelBone, 0);
+        Matrix.setIdentityM(mBoneNorm, 0);
 
         Resources res = getResources();
         mStereoCam = new StereoCamera(res);
@@ -172,15 +177,20 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mNumBoneVerts = surfParse.getNumVerts();
         mNumBoneTris = surfParse.getNumTris();
         float [] boneVertices = surfParse.getVertices();
-        // scale the vertices down to meters from mm
-        for (int i = 0; i < boneVertices.length; i++) {
-            boneVertices[i] /= 100.0f;
-        }
+        float [] boneCentroid = surfParse.getCentroid();
+        // offset vertices by centroid so that the model is centered at (0, 0, 0)
+        // and scale the vertices down to meters from mm
+//        for (int i = 0; i < mNumBoneVerts; i++) {
+//            boneVertices[i * ELEMENTS_PER_POINT] = (boneVertices[i * ELEMENTS_PER_POINT] - centroid[0]) / 100.0f;
+//            boneVertices[i * ELEMENTS_PER_POINT + 1] = (boneVertices[i * ELEMENTS_PER_POINT + 1] - centroid[1]) / 100.0f;
+//            boneVertices[i * ELEMENTS_PER_POINT + 2] = (boneVertices[i * ELEMENTS_PER_POINT + 2] - centroid[2]) / 100.0f;
+//        }
         float [] boneNormals = surfParse.getNormals();
         short [] boneIndices = surfParse.getIndices();
 
         Log.d("NUM VERTS", String.valueOf(surfParse.getNumVerts()));
         Log.d("NUM TRIS", String.valueOf(surfParse.getNumTris()));
+        Log.d("CENTROID", "(" + String.valueOf(boneCentroid[0]) + ", " + String.valueOf(boneCentroid[1]) + ", " + String.valueOf(boneCentroid[2]) + ")");
         Log.d("VERTS1", "(" + String.valueOf(boneVertices[0]) + ", " + String.valueOf(boneVertices[1]) + ", " + String.valueOf(boneVertices[2]) + ")");
         Log.d("NORMS1", "(" + String.valueOf(boneNormals[0]) + ", " + String.valueOf(boneNormals[1]) + ", " + String.valueOf(boneNormals[2]) + ")");
         Log.d("INDICES1", "(" + String.valueOf(boneIndices[0]) + ", " + String.valueOf(boneIndices[1]) + ", " + String.valueOf(boneIndices[2]) + ")");
@@ -254,6 +264,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glAttachShader(mBoneProgram, vertexShader);
         GLES20.glAttachShader(mBoneProgram, fragmentShader);
 
+        // MUST BIND BEFORE LINKING SHADERS
         mBonePositionParam = 0;
         GLES20.glBindAttribLocation(mBoneProgram, mBonePositionParam, "a_Position");
         mBoneNormalParam = 1;
@@ -271,8 +282,18 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
         glutil.checkGLError("binding uniforms");
 
-        Matrix.setIdentityM(mModelBone, 0);
-        Matrix.translateM(mModelBone, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
+        // Initialize bone model normalization matrix
+        // We want to first translate by the negative centroid to move close to (0, 0, 0),
+        // then scale from mm (original scale in SURF file) to m.
+        float transCent[] = new float[16];
+        Matrix.setIdentityM(transCent, 0);
+        Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
+        float scaleMat[] = new float[16];
+        Matrix.setIdentityM(scaleMat, 0);
+        float coeff = 0.01f;
+        Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
+
+        Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
     }
 
     @Override
@@ -301,6 +322,12 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
         glutil.checkGLError("colorParam");
+
+        // calculate bone model matrix
+        float temp[] = new float[16];
+        Matrix.setIdentityM(temp, 0);
+        Matrix.translateM(temp, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
+        Matrix.multiplyMM(mModelBone, 0, temp, 0, mBoneNorm, 0);
 
         // Apply the eye transformation to the camera.
         Matrix.multiplyMM(mView, 0, eye.getEyeView(), 0, mCamera, 0);

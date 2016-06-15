@@ -25,6 +25,7 @@ public class SurfParser {
     private float [] vertices;
     private float [] normals;
     private short [] indices;
+    private float [] centroid;
 
     /**
      * Constructor for SURF parser.
@@ -100,6 +101,7 @@ public class SurfParser {
      */
     private void readGeometry(BufferedReader br, int numLines) {
         try {
+            float [] sum = new float[] {0.0f, 0.0f, 0.0f};
             for (int i = 0; i < numLines; i++) {
                 String line = br.readLine();
                 String [] tokens = line.split(" ");
@@ -107,14 +109,22 @@ public class SurfParser {
                 float [] v = {Float.parseFloat(tokens[0]), Float.parseFloat(tokens[1]), Float.parseFloat(tokens[2])};
                 // now normals
                 float [] n = {Float.parseFloat(tokens[3]), Float.parseFloat(tokens[4]), Float.parseFloat(tokens[5])};
-                // add it to all vertices and normals
+                // add it to all vertices
                 vertices[i * COORDS_PER_VERTEX] = v[0];
                 vertices[i * COORDS_PER_VERTEX + 1] = v[1];
                 vertices[i * COORDS_PER_VERTEX + 2] = v[2];
+                // update sum
+                sum[0] += v[0];
+                sum[1] += v[1];
+                sum[2] += v[2];
+                // add to all normals
                 normals[i * COORDS_PER_VERTEX] = n[0];
                 normals[i * COORDS_PER_VERTEX + 1] = n[1];
                 normals[i * COORDS_PER_VERTEX + 2] = n[2];
             }
+
+            // init centroid
+            centroid = new float[] {sum[0] / numLines, sum[1] / numLines, sum[2] / numLines};
 
             return;
         } catch (IOException e) {
@@ -167,5 +177,9 @@ public class SurfParser {
 
     public short[] getIndices() {
         return indices;
+    }
+
+    public float[] getCentroid () {
+        return centroid;
     }
 }
