@@ -26,4 +26,7 @@ dependencies {
     compile project(':gvr-base')
     compile project(':gvr-common')
     compile project(':cardboardarlibrary')
+    compile project(':aruco')
+    compile project(':min3drotation')
+    compile project(':openCVLibrary2411')
 }
