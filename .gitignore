@@ -1,2 +1,3 @@
 CardBoneViz/.idea/*
-*/build/*
+*.class
+CardBoneViz/*/build/*
