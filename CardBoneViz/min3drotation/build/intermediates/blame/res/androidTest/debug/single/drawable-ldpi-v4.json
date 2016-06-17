@@ -1,10 +1,14 @@
 [
     {
+        "merged": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\drawable-ldpi-v4\\icon.png",
+        "source": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\drawable-ldpi-v4\\icon.png"
+    },
+    {
         "merged": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\testSamples\\Aruco2\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\drawable-ldpi-v4\\icon.png",
         "source": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\testSamples\\Aruco2\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\drawable-ldpi-v4\\icon.png"
     },
     {
-        "merged": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\drawable-ldpi-v4\\icon.png",
-        "source": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\drawable-ldpi-v4\\icon.png"
+        "merged": "C:\\Users\\josia_000\\Documents\\REU\\CardBoneViz\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\drawable-ldpi-v4\\icon.png",
+        "source": "C:\\Users\\josia_000\\Documents\\REU\\CardBoneViz\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\drawable-ldpi-v4\\icon.png"
     }
 ]
