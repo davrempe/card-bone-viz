@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger version="3"><dataSet config="main"><source path="C:\Users\Davis\Documents\research\reu_2016\card-bone-viz\CardBoneViz\min3drotation\src\main\assets"/><source path="C:\Users\Davis\Documents\research\reu_2016\card-bone-viz\CardBoneViz\min3drotation\build\generated\assets\shaders\debug"/></dataSet><dataSet config="debug"><source path="C:\Users\Davis\Documents\research\reu_2016\card-bone-viz\CardBoneViz\min3drotation\src\debug\assets"/></dataSet></merger>

@@ -1,2 +1,1 @@
-include ':app', ':gvr-base', ':gvr-common', ':cardboardarlibrary'
-include ':openCVLibrary310'
+include ':app', ':gvr-base', ':gvr-common', ':cardboardarlibrary', ':aruco', ':min3drotation', ':openCVLibrary2411'

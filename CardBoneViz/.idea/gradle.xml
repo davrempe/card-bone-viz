@@ -10,20 +10,24 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/aruco" />
             <option value="$PROJECT_DIR$/cardboardarlibrary" />
             <option value="$PROJECT_DIR$/gvr-base" />
             <option value="$PROJECT_DIR$/gvr-common" />
-            <option value="$PROJECT_DIR$/openCVLibrary310" />
+            <option value="$PROJECT_DIR$/min3drotation" />
+            <option value="$PROJECT_DIR$/openCVLibrary2411" />
           </set>
         </option>
         <option name="myModules">
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/aruco" />
             <option value="$PROJECT_DIR$/cardboardarlibrary" />
             <option value="$PROJECT_DIR$/gvr-base" />
             <option value="$PROJECT_DIR$/gvr-common" />
-            <option value="$PROJECT_DIR$/openCVLibrary310" />
+            <option value="$PROJECT_DIR$/min3drotation" />
+            <option value="$PROJECT_DIR$/openCVLibrary2411" />
           </set>
         </option>
       </GradleProjectSettings>

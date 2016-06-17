@@ -1,0 +1,88 @@
+[
+    {
+        "outputFile": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\testSamples\\Aruco2\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\values\\values.xml",
+        "map": [
+            {
+                "to": {
+                    "startLine": 2,
+                    "startColumn": 4,
+                    "startOffset": 55,
+                    "endColumn": 42,
+                    "endOffset": 93
+                },
+                "from": {
+                    "file": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\testSamples\\Aruco2\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\values\\values.xml",
+                    "position": {
+                        "startLine": 2,
+                        "startColumn": 4,
+                        "startOffset": 55,
+                        "endColumn": 42,
+                        "endOffset": 93
+                    }
+                }
+            },
+            {
+                "to": {
+                    "startLine": 3,
+                    "startColumn": 4,
+                    "startOffset": 98,
+                    "endColumn": 61,
+                    "endOffset": 155
+                },
+                "from": {
+                    "file": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\testSamples\\Aruco2\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\values\\values.xml",
+                    "position": {
+                        "startLine": 3,
+                        "startColumn": 4,
+                        "startOffset": 98,
+                        "endColumn": 61,
+                        "endOffset": 155
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "outputFile": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\res\\merged\\androidTest\\debug\\values\\values.xml",
+        "map": [
+            {
+                "to": {
+                    "startLine": 2,
+                    "startColumn": 4,
+                    "startOffset": 55,
+                    "endColumn": 42,
+                    "endOffset": 93
+                },
+                "from": {
+                    "file": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\values\\values.xml",
+                    "position": {
+                        "startLine": 2,
+                        "startColumn": 4,
+                        "startOffset": 55,
+                        "endColumn": 42,
+                        "endOffset": 93
+                    }
+                }
+            },
+            {
+                "to": {
+                    "startLine": 3,
+                    "startColumn": 4,
+                    "startOffset": 98,
+                    "endColumn": 61,
+                    "endOffset": 155
+                },
+                "from": {
+                    "file": "C:\\Users\\Davis\\Documents\\research\\reu_2016\\card-bone-viz\\CardBoneViz\\min3drotation\\build\\intermediates\\bundles\\debug\\res\\values\\values.xml",
+                    "position": {
+                        "startLine": 3,
+                        "startColumn": 4,
+                        "startOffset": 98,
+                        "endColumn": 61,
+                        "endOffset": 155
+                    }
+                }
+            }
+        ]
+    }
+]
