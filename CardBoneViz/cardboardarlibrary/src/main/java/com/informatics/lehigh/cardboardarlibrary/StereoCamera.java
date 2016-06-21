@@ -2,7 +2,6 @@ package com.informatics.lehigh.cardboardarlibrary;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -26,7 +25,7 @@ import android.view.Surface;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.util.Arrays;
+import java.util.List;
 
 import javax.microedition.khronos.opengles.GL10;
 
@@ -40,6 +39,9 @@ import javax.microedition.khronos.opengles.GL10;
 public class StereoCamera {
 
     private static final String TAG = "StereoCamera";
+
+    public static final int CAPTURE_ONCE_PER_FRAME = 0;
+    public static final int CAPTURE_CONTINUOUSLY = 1;
 
     //
     // OpenGL-related members
@@ -69,6 +71,10 @@ public class StereoCamera {
     //
     // Camera access related members
     //
+    /** The camera manager */
+    private CameraManager mCamManager;
+    /** ID of the front facing camera */
+    String mCameraID = "";
     /** The front-facing camera */
     private CameraDevice mCameraDevice;
     /** Capture session related to front-facing camera */
@@ -79,10 +85,10 @@ public class StereoCamera {
     private Size mPreviewSize;
     /** Surface texture attached to GL screen */
     private SurfaceTexture mSurfaceTexture;
-    /** Surface holding screen SurfaceTexture */
-    private Surface mSurface;
     /** Callback function for camera capture */
     private CameraCaptureSession.CaptureCallback mCapCall;
+    /** Setting for capture frequency */
+    private int mCapSetting;
 
     //
     // CONSTANTS
@@ -112,20 +118,50 @@ public class StereoCamera {
 
     /**
      * Creates a new StereoCamera object.
-     * Use {@link #initCamera(Activity activity) initCamera} and {@link #initRenderer() initRenderer} to initialize the stereo camera.
+     * Use {@link #initCamera initCamera} and {@link #initRenderer initRenderer} to initialize the stereo camera.
+     * @param activity - Activity used to access camera services.
      */
-    public StereoCamera(Resources res) {
+    public StereoCamera(Activity activity) {
         mModelScreen = new float[16];
         mModelViewProjection = new float[16];
-        glutil = new GLUtil(res);
+        glutil = new GLUtil(activity.getResources());
+
+        // initialize camera related things
+        try {
+            mCamManager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+            String[] cameraIDs = mCamManager.getCameraIdList();
+            // find back-facing camera
+            for (String id : cameraIDs) {
+                CameraCharacteristics chars = mCamManager.getCameraCharacteristics(id);
+                if (chars.get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK) {
+                    mCameraID = id;
+                }
+            }
+
+            CameraCharacteristics camChars = mCamManager.getCameraCharacteristics(mCameraID);
+            StreamConfigurationMap streamMap = camChars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+            Size[] sizes = streamMap.getOutputSizes(SurfaceTexture.class);
+            // get the output resolution from camera
+            mPreviewSize = sizes[0];
+
+            int formats[] = streamMap.getOutputFormats();
+            int first = formats[0];
+        } catch (CameraAccessException cae) {
+            Log.e(TAG, "COULD NOT ACCESS CAMERA");
+        }
     }
 
   /**
-   * Initilaizes the stereo camera by connecting to the front facing camera device
-   * and binding it's data to a GL plane facing the viewer.
-   * @param activity - Activity used to access camera.
+   * Initilaizes the stereo camera by opening the front facing camera device
+   * and binding it's data to a GL plane facing the viewer, as well as any additional
+   * Surfaces provided.
+   * @param addSurfaces - Additional surfaces to draw the camera image to. This may be any Surface detailed
+   *                    in {@link android.hardware.camera2.CameraDevice#createCaptureSession createCaptureSession}.
+   * @param captureSetting - Tells the StereoCamera what capture mode to use: CAPTURE_ONCE_PER_FRAME or CAPTURE_CONTINUOUSLY.
    */
-  public void initCamera(Activity activity) throws CameraAccessException{
+  public void initCamera(final List<Surface> addSurfaces, int captureSetting) throws CameraAccessException {
+        mCapSetting = captureSetting;
+
         //
         // First initialize all callback functions
         //
@@ -152,11 +188,13 @@ public class StereoCamera {
                 mPreviewBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
 
                 // repeatedly capture current frame as app runs
-//        try {
-//          mCameraCaptureSession.setRepeatingRequest(mPreviewBuilder.build(),capCall, null);
-//        } catch(Exception e) {
-//          Log.e("Error", "capturing");
-//        }
+                if (mCapSetting == CAPTURE_CONTINUOUSLY) {
+                    try {
+                        mCameraCaptureSession.setRepeatingRequest(mPreviewBuilder.build(), mCapCall, null);
+                    } catch (Exception e) {
+                        Log.e("Error", "capturing");
+                    }
+                }
             }
 
             @Override
@@ -174,7 +212,7 @@ public class StereoCamera {
                 // create SurfaceTexture to store images
                 mSurfaceTexture = new SurfaceTexture(mScreenTextureID);
                 mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                mSurface = new Surface(mSurfaceTexture);
+                Surface glSurface = new Surface(mSurfaceTexture);
 
                 try {
                     mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -182,10 +220,17 @@ public class StereoCamera {
                     e.printStackTrace();
                 }
 
-                mPreviewBuilder.addTarget(mSurface);
+                // add targets from user
+                for (int i = 0; i < addSurfaces.size(); i++) {
+                    mPreviewBuilder.addTarget(addSurfaces.get(i));
+                }
+                // add our gl texture target
+                mPreviewBuilder.addTarget(glSurface);
 
+                // add gl texture to surface list before creating capture session
+                addSurfaces.add(glSurface);
                 try {
-                    mCameraDevice.createCaptureSession(Arrays.asList(mSurface), ccCall, null);
+                    mCameraDevice.createCaptureSession(addSurfaces, ccCall, null);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
                 }
@@ -201,24 +246,7 @@ public class StereoCamera {
             }
         };
 
-        // initialize camera related things
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        String [] cameraIDs = manager.getCameraIdList();
-        String cameraID = "";
-        // find back-facing camera
-        for (String id : cameraIDs) {
-            CameraCharacteristics chars = manager.getCameraCharacteristics(id);
-            if (chars.get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK) {
-                cameraID = id;
-            }
-        }
-
-        CameraCharacteristics camChars = manager.getCameraCharacteristics(cameraID);
-        StreamConfigurationMap streamMap = camChars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-        Size [] sizes = streamMap.getOutputSizes(SurfaceTexture.class);
-        // get the output resolution from camera
-        mPreviewSize = sizes[0];
-        manager.openCamera(cameraID, cdCall, null);
+        mCamManager.openCamera(mCameraID, cdCall, null);
     }
 
   /**
@@ -287,13 +315,15 @@ public class StereoCamera {
    */
     public void updateStereoView(float [] rightVec, float [] upVec, float [] forwardVec) throws CameraAccessException {
 
-        // capture image to use
-        try {
-            mCameraCaptureSession.capture(mPreviewBuilder.build(),mCapCall, new Handler(Looper.getMainLooper()));
-        } catch(IllegalStateException ise) {
-            Log.e(TAG, "Error capturing: " + ise.getMessage());
-        } catch(IllegalArgumentException iae) {
-            Log.e(TAG, "Error capturing: " + iae.getMessage());
+        // capture image to use if capturing once per fram
+        if (mCapSetting == CAPTURE_ONCE_PER_FRAME) {
+            try {
+                mCameraCaptureSession.capture(mPreviewBuilder.build(), mCapCall, new Handler(Looper.getMainLooper()));
+            } catch (IllegalStateException ise) {
+                Log.e(TAG, "Error capturing: " + ise.getMessage());
+            } catch (IllegalArgumentException iae) {
+                Log.e(TAG, "Error capturing: " + iae.getMessage());
+            }
         }
 
         // create m in column major order
@@ -353,6 +383,13 @@ public class StereoCamera {
 
       // free texture
       GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
+    }
+
+    /**
+     * @return the size of the image being captured from the back-facing camera
+     */
+    public Size getCameraImageSize() {
+        return mPreviewSize;
     }
 
 }

@@ -1,11 +1,16 @@
 package com.informatics.lehigh.cardboneviz;
 
 import android.content.res.Resources;
+import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.hardware.camera2.CameraAccessException;
+import android.media.ImageReader;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
+import android.view.Surface;
 
 import com.google.vr.sdk.base.Eye;
 import com.google.vr.sdk.base.GvrActivity;
@@ -18,10 +23,15 @@ import javax.microedition.khronos.egl.EGLConfig;
 import com.informatics.lehigh.cardboardarlibrary.StereoCamera;
 import com.informatics.lehigh.cardboardarlibrary.GLUtil;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
 
 public class MainActivity extends GvrActivity implements GvrView.StereoRenderer {
 
@@ -94,7 +104,28 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     //
     // MISC
     //
+    /** Renders stereo-view of back-facing phone camera */
     private StereoCamera mStereoCam;
+    /** Image processor to track ultrasound wand location */
+    private UltrasoundTracker mUltraTracker;
+    /** The thread being used to run ultrasound tracking */
+    private Thread mTrackingThread;
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    Log.i("OpenCV", "OpenCV loaded successfully");
+                } break;
+                default:
+                {
+                    super.onManagerConnected(status);
+                } break;
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,19 +140,30 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         Matrix.setIdentityM(mModelBone, 0);
         Matrix.setIdentityM(mBoneNorm, 0);
 
-        Resources res = getResources();
-        mStereoCam = new StereoCamera(res);
-        glutil = new GLUtil(res);
+        mStereoCam = new StereoCamera(this);
+        glutil = new GLUtil(getResources());
 
         initializeGvrView();
 
+        // create surface for image processing
+        Size imgSize = mStereoCam.getCameraImageSize();
+        ImageReader imgReader = ImageReader.newInstance(imgSize.getWidth(), imgSize.getHeight(),
+                ImageFormat.YUV_420_888, 1);
+        Surface procSurface = imgReader.getSurface();
+        ArrayList<Surface> surfList = new ArrayList<Surface>();
+        surfList.add(procSurface);
+
         try {
-            mStereoCam.initCamera(this);
+            mStereoCam.initCamera(surfList, StereoCamera.CAPTURE_ONCE_PER_FRAME);
         } catch(CameraAccessException cae) {
             Log.e(TAG, "COULD NOT ACCESS CAMERA");
             cae.printStackTrace();
         }
 
+        // initialize ultrasound wand tracker
+        mUltraTracker = new UltrasoundTracker(imgReader);
+        mTrackingThread = new Thread(mUltraTracker);
+        mTrackingThread.start();
     }
 
     public void initializeGvrView() {
@@ -150,6 +192,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     @Override
     public void onResume() {
         super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
+        } else {
+            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
     }
 
     @Override
@@ -160,6 +209,17 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     @Override
     public void onRendererShutdown() {
         Log.i(TAG, "onRendererShutdown");
+        //
+        // cleanup
+        //
+
+        // stop tracking thread
+        mUltraTracker.terminate();
+        try {
+            mTrackingThread.join();
+        } catch (InterruptedException e) {
+            Log.e(TAG, "UNABLE TO PROPERLY SHUTDOWN TRACKING THREAD");
+        }
     }
 
     @Override
@@ -312,6 +372,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
         // Build the camera matrix.
         Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+
+        // TODO get tvec and rvec from Tracker thread
 
         glutil.checkGLError("onReadyToDraw");
     }
