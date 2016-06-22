@@ -58,7 +58,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final float[] LIGHT_POS_IN_WORLD_SPACE = new float[] {0.0f, 2.0f, 0.0f, 1.0f};
     // All bone vertices should be same color
     private static final float[] BONE_COLOR = new float [] {1.0f, 0.0f, 0.0f, 1.0f};
-    private static final float[] BONE_INIT_POS = new float[] {0.5f, 0.0f, -1.5f};
+    private static final float[] BONE_INIT_POS = new float[] {0.25f, 0.0f, -1.5f};
     // Axis drawing properties
     private static final boolean DRAW_AXES = false;
     private static final int NUM_AXIS_VERTICES = 6;
@@ -561,8 +561,9 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         }
 
         // must include normalization transform in model matrix
-        // TODO this second arg should be markerTransform
-        Matrix.multiplyMM(mModelBone, 0, BONE_INIT_POS, 0, mBoneNorm, 0);
+        // TODO THIS LINE SHOULD NOT EXIST - only for initial translation
+        Matrix.translateM(markerTransform, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
+        Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
 
         glutil.checkGLError("onReadyToDraw");
     }
