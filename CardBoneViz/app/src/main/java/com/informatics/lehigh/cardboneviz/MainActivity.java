@@ -1,8 +1,6 @@
 package com.informatics.lehigh.cardboneviz;
 
-import android.content.res.Resources;
 import android.graphics.ImageFormat;
-import android.graphics.PixelFormat;
 import android.hardware.camera2.CameraAccessException;
 import android.media.ImageReader;
 import android.opengl.GLES20;
@@ -26,6 +24,9 @@ import com.informatics.lehigh.cardboardarlibrary.GLUtil;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -50,14 +51,28 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final int ELEMENTS_PER_POSITION = 4;
     private static final int ELEMENTS_PER_COLOR = 4;
     private static final int ELEMENTS_PER_NORMAL = 3;
-    private static final int ELEMENTS_PER_VERTEX = ELEMENTS_PER_POSITION + ELEMENTS_PER_NORMAL + ELEMENTS_PER_COLOR;
-    private static final int STRIDE = ELEMENTS_PER_VERTEX * BYTES_PER_FLOAT;
+    private static final int ELEMENTS_PER_BONE_VERTEX = ELEMENTS_PER_POSITION + ELEMENTS_PER_NORMAL + ELEMENTS_PER_COLOR;
+    private static final int BONE_STRIDE = ELEMENTS_PER_BONE_VERTEX * BYTES_PER_FLOAT;
     private static final String TAG = "MainActivity";
     // We keep the light always position just above the user.
     private static final float[] LIGHT_POS_IN_WORLD_SPACE = new float[] {0.0f, 2.0f, 0.0f, 1.0f};
     // All bone vertices should be same color
     private static final float[] BONE_COLOR = new float [] {1.0f, 0.0f, 0.0f, 1.0f};
     private static final float[] BONE_INIT_POS = new float[] {0.5f, 0.0f, -1.5f};
+    // Axis drawing properties
+    private static final boolean DRAW_AXES = false;
+    private static final int NUM_AXIS_VERTICES = 6;
+    private static final float AXIS_LENGTH = 0.02f;
+    private static final float[] AXIS_VERTICES = new float[] {
+            0.0f, 0.0f, 0.0f, 1.0f, // x axis
+            AXIS_LENGTH, 0.0f, 0.0f, 1.0f,
+            0.0f, 0.0f, 0.0f, 1.0f, // y axis
+            0.0f, AXIS_LENGTH, 0.0f, 1.0f,
+            0.0f, 0.0f, 0.0f, 1.0f, // z axis
+            0.0f, 0.0f, AXIS_LENGTH, 1.0f
+    };
+    private static final int ELEMENTS_PER_AXIS_VERTEX = ELEMENTS_PER_POSITION + ELEMENTS_PER_COLOR;
+    private static final int AXIS_STRIDE = ELEMENTS_PER_AXIS_VERTEX * BYTES_PER_FLOAT;
 
     //
     // OpenGL-related members
@@ -86,7 +101,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private int mBoneIndexBuf;
     /** Program using bone shaders */
     private int mBoneProgram;
-    /** Attribute location for screen position */
+    /** Attribute location for bone position */
     private int mBonePositionParam;
     /** Attribute location for bone normals */
     private int mBoneNormalParam;
@@ -100,6 +115,25 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private int mBoneLightPositionParam;
     /** GLUtil instance */
     private GLUtil glutil;
+
+    //
+    // Draw axis-related members
+    //
+    /** Model matrix for axes */
+    private float [] mModelAxis;
+    /** ModelViewProjection matrix for axes */
+    private float [] mModelViewProjectionAxis;
+    /** Buffer for axis vertices */
+    private int mAxisVertBuf;
+    /** Program using axis shaders */
+    private int mAxisProgram;
+    /** Attribute location for axis position */
+    private int mAxisPositionParam;
+    /** Attribute location for axis colors */
+    private int mAxisColorParam;
+    /** Attribute location for axis ModelViewProjection matrix */
+    private int mAxisModelViewProjectionParam;
+
 
     //
     // MISC
@@ -139,6 +173,12 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mCamera = new float[16];
         Matrix.setIdentityM(mModelBone, 0);
         Matrix.setIdentityM(mBoneNorm, 0);
+
+        if (DRAW_AXES) {
+            mModelAxis = new float[16];
+            mModelViewProjectionAxis = new float[16];
+            Matrix.setIdentityM(mModelAxis, 0);
+        }
 
         mStereoCam = new StereoCamera(this);
         glutil = new GLUtil(getResources());
@@ -209,6 +249,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     @Override
     public void onRendererShutdown() {
         Log.i(TAG, "onRendererShutdown");
+
         //
         // cleanup
         //
@@ -238,13 +279,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mNumBoneTris = surfParse.getNumTris();
         float [] boneVertices = surfParse.getVertices();
         float [] boneCentroid = surfParse.getCentroid();
-        // offset vertices by centroid so that the model is centered at (0, 0, 0)
-        // and scale the vertices down to meters from mm
-//        for (int i = 0; i < mNumBoneVerts; i++) {
-//            boneVertices[i * ELEMENTS_PER_POINT] = (boneVertices[i * ELEMENTS_PER_POINT] - centroid[0]) / 100.0f;
-//            boneVertices[i * ELEMENTS_PER_POINT + 1] = (boneVertices[i * ELEMENTS_PER_POINT + 1] - centroid[1]) / 100.0f;
-//            boneVertices[i * ELEMENTS_PER_POINT + 2] = (boneVertices[i * ELEMENTS_PER_POINT + 2] - centroid[2]) / 100.0f;
-//        }
         float [] boneNormals = surfParse.getNormals();
         short [] boneIndices = surfParse.getIndices();
 
@@ -263,23 +297,26 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         //
         // A vertex object is structured as {vec4 position, vec4 color, vec3 normal}
         //
-        int dataSize = mNumBoneVerts * ELEMENTS_PER_VERTEX;
+        int dataSize = mNumBoneVerts * ELEMENTS_PER_BONE_VERTEX;
         float [] boneData = new float[dataSize];
         for (int i = 0; i < mNumBoneVerts; i++) {
-            boneData[i * ELEMENTS_PER_VERTEX] = boneVertices[i * ELEMENTS_PER_POINT];
-            boneData[i * ELEMENTS_PER_VERTEX + 1] = boneVertices[i * ELEMENTS_PER_POINT + 1];
-            boneData[i * ELEMENTS_PER_VERTEX + 2] = boneVertices[i * ELEMENTS_PER_POINT + 2];
-            boneData[i * ELEMENTS_PER_VERTEX + 3] = 1.0f;
-            boneData[i * ELEMENTS_PER_VERTEX + 4] = BONE_COLOR[0];
-            boneData[i * ELEMENTS_PER_VERTEX + 5] = BONE_COLOR[1];
-            boneData[i * ELEMENTS_PER_VERTEX + 6] = BONE_COLOR[2];
-            boneData[i * ELEMENTS_PER_VERTEX + 7] = BONE_COLOR[3];
-            boneData[i * ELEMENTS_PER_VERTEX + 8] = boneNormals[i * ELEMENTS_PER_NORMAL];
-            boneData[i * ELEMENTS_PER_VERTEX + 9] = boneNormals[i * ELEMENTS_PER_NORMAL + 1];
-            boneData[i * ELEMENTS_PER_VERTEX + 10] = boneNormals[i * ELEMENTS_PER_NORMAL + 2];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX] = boneVertices[i * ELEMENTS_PER_POINT];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 1] = boneVertices[i * ELEMENTS_PER_POINT + 1];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 2] = boneVertices[i * ELEMENTS_PER_POINT + 2];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 3] = 1.0f;
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 4] = BONE_COLOR[0];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 5] = BONE_COLOR[1];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 6] = BONE_COLOR[2];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 7] = BONE_COLOR[3];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 8] = boneNormals[i * ELEMENTS_PER_NORMAL];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 9] = boneNormals[i * ELEMENTS_PER_NORMAL + 1];
+            boneData[i * ELEMENTS_PER_BONE_VERTEX + 10] = boneNormals[i * ELEMENTS_PER_NORMAL + 2];
         }
 
+        //
         // Initialize GL elements for bone model
+        //
+
         // make buffer for bone vertices
         ByteBuffer bbBoneData = ByteBuffer.allocateDirect(boneData.length * BYTES_PER_FLOAT);
         bbBoneData.order(ByteOrder.nativeOrder());
@@ -342,9 +379,11 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
         glutil.checkGLError("binding uniforms");
 
+        //
         // Initialize bone model normalization matrix
         // We want to first translate by the negative centroid to move close to (0, 0, 0),
         // then scale from mm (original scale in SURF file) to m.
+        //
         float transCent[] = new float[16];
         Matrix.setIdentityM(transCent, 0);
         Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
@@ -354,6 +393,89 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
 
         Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
+
+        //
+        // Now for the axis data
+        //
+        if (DRAW_AXES) {
+            // Aggregate axis data
+            // Vertex object is of the form {vec4 position, vec4 color}
+            dataSize = NUM_AXIS_VERTICES * ELEMENTS_PER_AXIS_VERTEX;
+            float[] axisData = new float[dataSize];
+            for (int i = 0; i < NUM_AXIS_VERTICES; i++) {
+                float [] curPos = {AXIS_VERTICES[i*ELEMENTS_PER_POSITION],
+                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 1],
+                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 2],
+                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 3]};
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX] = curPos[0];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 1] = curPos[1];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 2] = curPos[2];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 3] = curPos[3];
+                float [] axisColor = new float[4];
+                if (i < 2) {
+                    axisColor[0] = 1.0f;
+                    axisColor[1] = 0.0f;
+                    axisColor[2] = 0.0f;
+                } else if (i < 4) {
+                    axisColor[0] = 0.0f;
+                    axisColor[1] = 1.0f;
+                    axisColor[2] = 0.0f;
+                } else {
+                    axisColor[0] = 0.0f;
+                    axisColor[1] = 0.0f;
+                    axisColor[2] = 1.0f;
+                }
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 4] = axisColor[0];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 5] = axisColor[1];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 6] = axisColor[2];
+                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 7] = 1.0f;
+            }
+
+            // make buffer for axis data
+            ByteBuffer bbAxisData = ByteBuffer.allocateDirect(axisData.length * BYTES_PER_FLOAT);
+            bbAxisData.order(ByteOrder.nativeOrder());
+            FloatBuffer axisDataFloatBuf = bbAxisData.asFloatBuffer();
+            axisDataFloatBuf.put(axisData);
+            axisDataFloatBuf.position(0);
+
+            // init gl buffers
+            int [] axisBuffs = new int[1];
+            GLES20.glGenBuffers(1, axisBuffs, 0);
+            mAxisVertBuf = axisBuffs[0];
+
+            // bind vertex buffer
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mAxisVertBuf);
+            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, axisDataFloatBuf.capacity()*BYTES_PER_FLOAT,
+                    axisDataFloatBuf, GLES20.GL_STATIC_DRAW);
+
+            // free buffer
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+            glutil.checkGLError("bindingAxisBuffers");
+
+            // create and link shaders
+            vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
+            fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
+
+            mAxisProgram = GLES20.glCreateProgram();
+            GLES20.glAttachShader(mAxisProgram, vertexShader);
+            GLES20.glAttachShader(mAxisProgram, fragmentShader);
+
+            // MUST BIND BEFORE LINKING SHADERS
+            mAxisPositionParam = 3;
+            GLES20.glBindAttribLocation(mAxisProgram, mAxisPositionParam, "a_Position");
+            mAxisColorParam = 4;
+            GLES20.glBindAttribLocation(mAxisProgram, mAxisColorParam, "a_Color");
+            glutil.checkGLError("binding axis attributes");
+
+            GLES20.glLinkProgram(mAxisProgram);
+            GLES20.glUseProgram(mAxisProgram);
+            glutil.checkGLError("Link axis program");
+
+            mAxisModelViewProjectionParam = GLES20.glGetUniformLocation(mAxisProgram, "u_MVP");
+            glutil.checkGLError("binding uniforms");
+        }
+
     }
 
     @Override
@@ -373,7 +495,74 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         // Build the camera matrix.
         Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
-        // TODO get tvec and rvec from Tracker thread
+        // calculate bone model matrix based on marker location
+        Mat tvecMat = null;
+        Mat rvecMat = null;
+        float markerTransform[] = new float [16];
+        Matrix.setIdentityM(markerTransform, 0);
+
+        if (mUltraTracker.isMarkerDetected()) {
+            Mat [] params = mUltraTracker.getMarkerParams();
+            tvecMat = params[0];
+            rvecMat = params[1];
+
+            // getting the translation vector is easy
+            // negate y and z for opengl coordinates
+            float tvecCam[] = new float[4];
+            tvecCam[0] = (float) tvecMat.get(0, 0)[0];
+            tvecCam[1] = -(float) tvecMat.get(1, 0)[0];
+            tvecCam[2] = -(float) tvecMat.get(2, 0)[0];
+            tvecCam[3] = 1.0f;
+
+            // transform to world coordinates from camera
+            // create m in column major order
+            // invert forward vec because in opengl -z is forward
+            float[] m = new float[] {
+                    rightVec[0], upVec[0], -forwardVec[0], 0.0f,
+                    rightVec[1], upVec[1], -forwardVec[1], 0.0f,
+                    rightVec[2], upVec[2], -forwardVec[2], 0.0f,
+                    0.0f, 0.0f, 0.0f, 1.0f
+            };
+            // a = M^T * b where b is vector representation in camera (cardboard) basis
+            float[] mt = new float[16];
+            Matrix.transposeM(mt, 0, m, 0);
+            float tvec[] = new float[4];
+            Matrix.multiplyMV(tvec, 0, mt, 0, tvecCam, 0);
+            // Build translation matrix
+            float trans[] = new float[16];
+            Matrix.setIdentityM(trans, 0);
+            Matrix.translateM(trans, 0, tvec[0], tvec[1], tvec[2]);
+
+            // must use rvec to find rotation matrix
+            // want to invert y and z for opengl
+            Mat glrotvecMat = new Mat(3, 1, CvType.CV_32FC1);
+            glrotvecMat.put(0, 0, rvecMat.get(0, 0)[0]);
+            glrotvecMat.put(1, 0, -1 * rvecMat.get(1, 0)[0]);
+            glrotvecMat.put(2, 0, -1 * rvecMat.get(2, 0)[0]);
+            Mat rotMat = new Mat(3, 3, CvType.CV_32FC1);
+            Calib3d.Rodrigues(glrotvecMat, rotMat);
+            // build gl rotation matrix (transpose)
+            float rot[] = {
+                    (float)rotMat.get(0, 0)[0], (float)rotMat.get(1, 0)[0], (float)rotMat.get(2, 0)[0], 0.0f,
+                    (float)rotMat.get(0, 1)[0], (float)rotMat.get(1, 1)[0], (float)rotMat.get(2, 1)[0], 0.0f,
+                    (float)rotMat.get(0, 2)[0], (float)rotMat.get(1, 2)[0], (float)rotMat.get(2, 2)[0], 0.0f,
+                    0.0f, 0.0f, 0.0f, 1.0f
+            };
+
+            // multiply together
+            markerTransform = trans;
+            // TODO figure out rotation
+            //Matrix.multiplyMM(markerTransform, 0, trans, 0, rot, 0);
+
+            if (DRAW_AXES) {
+                mModelAxis = markerTransform;
+                Log.d(TAG, "UPDATED AXIS MODEL");
+            }
+        }
+
+        // must include normalization transform in model matrix
+        // TODO this second arg should be markerTransform
+        Matrix.multiplyMM(mModelBone, 0, BONE_INIT_POS, 0, mBoneNorm, 0);
 
         glutil.checkGLError("onReadyToDraw");
     }
@@ -385,26 +574,33 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
         glutil.checkGLError("colorParam");
 
-        // calculate bone model matrix
-        float temp[] = new float[16];
-        Matrix.setIdentityM(temp, 0);
-        Matrix.translateM(temp, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
-        Matrix.multiplyMM(mModelBone, 0, temp, 0, mBoneNorm, 0);
-
         // Apply the eye transformation to the camera.
         Matrix.multiplyMM(mView, 0, eye.getEyeView(), 0, mCamera, 0);
         // Set the position of the light
         Matrix.multiplyMV(mLightPosInEyeSpace, 0, mView, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
-        // Get the perspective matrix
+        // Get the perspective matrix for bone model
         float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
         Matrix.multiplyMM(mModelView, 0, mView, 0, mModelBone, 0);
         Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
 
+        if (DRAW_AXES) {
+            // set up matrices for axes
+            float [] axisMV = new float [16];
+            Matrix.multiplyMM(axisMV, 0, mView, 0, mModelAxis, 0);
+            Matrix.multiplyMM(mModelViewProjectionAxis, 0, perspective, 0, axisMV, 0);
+        }
+
         // draw the stereo camera
         mStereoCam.drawStereoView(mView, perspective);
 
-        // draw the bone model
-        drawBone();
+
+        // draw the axes
+        if (DRAW_AXES) {
+            drawAxes();
+        } else {
+            // draw the bone model
+            drawBone();
+        }
     }
 
     public void drawBone() {
@@ -421,27 +617,53 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mBoneVertBuf);
         // position
         GLES20.glVertexAttribPointer(mBonePositionParam, ELEMENTS_PER_POSITION, GLES20.GL_FLOAT, false,
-                STRIDE, 0);
+                BONE_STRIDE, 0);
         GLES20.glEnableVertexAttribArray(mBonePositionParam);
         // colors
         GLES20.glVertexAttribPointer(mBoneColorParam, ELEMENTS_PER_COLOR, GLES20.GL_FLOAT, false,
-                STRIDE, ELEMENTS_PER_POSITION * BYTES_PER_FLOAT);
+                BONE_STRIDE, ELEMENTS_PER_POSITION * BYTES_PER_FLOAT);
         GLES20.glEnableVertexAttribArray(mBoneColorParam);
         // normals
         GLES20.glVertexAttribPointer(mBoneNormalParam, ELEMENTS_PER_NORMAL, GLES20.GL_FLOAT, false,
-                STRIDE, (ELEMENTS_PER_POSITION + ELEMENTS_PER_COLOR) * BYTES_PER_FLOAT);
+                BONE_STRIDE, (ELEMENTS_PER_POSITION + ELEMENTS_PER_COLOR) * BYTES_PER_FLOAT);
         GLES20.glEnableVertexAttribArray(mBoneNormalParam);
 
         // indices
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, mBoneIndexBuf);
         // draw
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, mNumBoneTris, GLES20.GL_UNSIGNED_SHORT, 0);
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, 3 * mNumBoneTris, GLES20.GL_UNSIGNED_SHORT, 0);
 
         // free buffers
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
 
         glutil.checkGLError("Drawing bone");
+    }
+
+    private void drawAxes() {
+        GLES20.glUseProgram(mAxisProgram);
+
+        // Set the ModelViewProjection matrix in the shader.
+        GLES20.glUniformMatrix4fv(mAxisModelViewProjectionParam, 1, false, mModelViewProjectionAxis, 0);
+
+        // bind attributes
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mAxisVertBuf);
+        // position
+        GLES20.glVertexAttribPointer(mAxisPositionParam, ELEMENTS_PER_POSITION, GLES20.GL_FLOAT, false,
+                AXIS_STRIDE, 0);
+        GLES20.glEnableVertexAttribArray(mAxisPositionParam);
+        // colors
+        GLES20.glVertexAttribPointer(mAxisColorParam, ELEMENTS_PER_COLOR, GLES20.GL_FLOAT, false,
+                AXIS_STRIDE, ELEMENTS_PER_POSITION * BYTES_PER_FLOAT);
+        GLES20.glEnableVertexAttribArray(mAxisColorParam);
+
+        // draw
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, NUM_AXIS_VERTICES);
+
+        // free buffer
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+        glutil.checkGLError("Drawing axes");
     }
 
     @Override

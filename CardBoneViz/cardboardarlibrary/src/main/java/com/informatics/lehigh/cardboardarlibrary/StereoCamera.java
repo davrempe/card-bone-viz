@@ -168,7 +168,7 @@ public class StereoCamera {
         mCapCall = new CameraCaptureSession.CaptureCallback() {
             @Override
             public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-                Log.d(TAG, "CAPTURED FRAME " + String.valueOf(result.getFrameNumber()));
+                //Log.d(TAG, "CAPTURED FRAME " + String.valueOf(result.getFrameNumber()));
             }
 
             @Override

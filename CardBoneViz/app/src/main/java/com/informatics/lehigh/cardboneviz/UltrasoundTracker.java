@@ -4,13 +4,19 @@ package com.informatics.lehigh.cardboneviz;
 import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
-import android.util.Size;
+import android.os.Environment;
+import android.util.Log;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
 
 import java.nio.ByteBuffer;
+import java.util.Vector;
+
+import es.ava.aruco.CameraParameters;
+import es.ava.aruco.Marker;
+import es.ava.aruco.MarkerDetector;
 
 /**
  * Class for constantly processing incoming image data in order to track
@@ -18,14 +24,18 @@ import java.nio.ByteBuffer;
  */
 public class UltrasoundTracker implements Runnable {
 
+    private static final String TAG = "UltrasoundTracker";
+
     /** Image reader used to access current camera image */
     private ImageReader mImgReader;
     /** The translation vector from the most recently processed frame */
-    private volatile float tvec[] = {0.0f, 0.0f, 0.0f};
+    private volatile Mat tvec;
     /** The rotation vector from the most recently processed frame */
-    private volatile float rvec[] = {0.0f, 0.0f, 0.0f};
+    private volatile Mat rvec;
     /** True if the run function should be running, false otherwise */
     private volatile boolean running = true;
+    /** True if there is a marker currently detected */
+    private volatile boolean markerDetected = false;
 
     public UltrasoundTracker(ImageReader imgReader) {
         mImgReader = imgReader;
@@ -37,17 +47,33 @@ public class UltrasoundTracker implements Runnable {
     }
 
     /**
-     * @return The translation vector from the most recently processed frame.
+     * @return The translation vector from the most recently processed frame or
+     * null if no frame has been processed yet.
      */
-    public float[] getTvec() {
+    public Mat getTvec() {
         return tvec;
     }
 
+    public boolean isMarkerDetected() {
+        return markerDetected;
+    }
+
     /**
-     * @return The rotation vector from the most recently processed frame.
+     * @return The rotation vector from the most recently processed frame or
+     * null if no frame has been processed yet.
      */
-    public float[] getRvec() {
+    public Mat getRvec() {
         return rvec;
+    }
+
+    /**
+     * Returns an array of both the translation and rotation vectors
+     * {tvec, rvec}
+     * @return
+     */
+    public Mat[] getMarkerParams() {
+        markerDetected = false;
+        return new Mat [] {tvec, rvec};
     }
 
     @Override
@@ -56,9 +82,22 @@ public class UltrasoundTracker implements Runnable {
             // get the currently captured image
             Image curImg = mImgReader.acquireLatestImage();
             if (curImg != null) {
+                //Log.d(TAG, "PROCESSING FRAME");
                 Mat rgba = getCvColorImage(curImg);
 
-                // TODO implement actual processing
+                MarkerDetector markerDetector = new MarkerDetector();
+                Vector<Marker> detectedMarkers = new Vector<>();
+                float markerSizeMeters = (float) 0.02;
+                CameraParameters camParams = new CameraParameters();
+                String externalDir = Environment.getExternalStorageDirectory().toString();
+                camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
+                markerDetector.detect(rgba, detectedMarkers, camParams, markerSizeMeters);
+                if (detectedMarkers.size() != 0) {
+                    rvec = detectedMarkers.get(0).getRvec();
+                    tvec = detectedMarkers.get(0).getTvec();
+                    markerDetected = true;
+                    Log.i(TAG, "MARKER DETECTED");
+                }
 
                 // release
                 curImg.close();
@@ -66,7 +105,7 @@ public class UltrasoundTracker implements Runnable {
         }
     }
 
-    /**
+     /**
      * Converts the given image to a CV RGBA Mat.
      * @param img
      * @return
