@@ -386,5 +386,45 @@ public abstract class Utils {
 	{
 		return( a1 * b1 + a2 * b2 + a3 * b3 );
 	}
+
+	protected static void alignToId(Mat rotation, int codeRotation) {
+		//get the matrix corresponding to the rotation vector
+		Mat R = new Mat(3, 3, CvType.CV_64FC1);
+		Calib3d.Rodrigues(rotation, R);
+
+		codeRotation += 1;
+		rotateZAxis(rotation, codeRotation * 90);
+	}
+
+	protected static void rotateZAxis(Mat rotation, double rotateDegrees) {
+		// get the matrix corresponding to the rotation vector
+		Mat R = new Mat(3,3,CvType.CV_64FC1);
+		Calib3d.Rodrigues(rotation, R);
+
+		// create the matrix to rotate around the Z axis
+		// cos -sin  0
+		// sin  cos  0
+		// 0    0    1
+		double[] rot = {
+				Math.cos(Math.toRadians(rotateDegrees)), -Math.sin(Math.toRadians(rotateDegrees)), 0,
+				Math.sin(Math.toRadians(rotateDegrees)), Math.cos(Math.toRadians(rotateDegrees)), 0,
+				0,0,1
+		};
+		// multiply both matrix
+		Mat res = new Mat(3,3, CvType.CV_64FC1);
+		double[] prod = new double[9];
+		double[] a = new double[9];
+		R.get(0, 0, a);
+		for(int i=0;i<3;i++)
+			for(int j=0;j<3;j++){
+				prod[3*i+j] = 0;
+				for(int k=0;k<3;k++){
+					prod[3*i+j] += a[3*i+k]*rot[3*k+j];
+				}
+			}
+		// convert the matrix to a vector with rodrigues back
+		res.put(0, 0, prod);
+		Calib3d.Rodrigues(res, rotation);
+	}
 	
 }

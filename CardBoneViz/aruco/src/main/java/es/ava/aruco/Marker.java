@@ -272,6 +272,8 @@ public class Marker extends MatOfPoint2f implements Comparable<Marker>{
 		double [] r1 = Rvec.get(1, 0);
 		double [] r2 = Rvec.get(2, 0);
 //		Utils.rotateXAxis(Rvec);
+
+		Utils.alignToId(Rvec, this.getRotations());
 	}
 
 	protected void setPoints(List<Point> p){
