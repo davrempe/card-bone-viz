@@ -38,12 +38,19 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     //
     // CONSTANTS
     //
+    private static final String TAG = "MainActivity";
     private static final int SURF_DATA = R.raw.data1;
     private static final float CAMERA_Z = 0.01f;
     private static final float Z_NEAR = 0.1f;
     private static final float Z_FAR = 100.0f;
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
+
+    // Bone drawing properties
+    //
+    // CHANGE DRAW BONE SETTING HERE
+    //
+    private static final boolean DRAW_BONE = true;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */
@@ -52,7 +59,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final int ELEMENTS_PER_NORMAL = 3;
     private static final int ELEMENTS_PER_BONE_VERTEX = ELEMENTS_PER_POSITION + ELEMENTS_PER_NORMAL + ELEMENTS_PER_COLOR;
     private static final int BONE_STRIDE = ELEMENTS_PER_BONE_VERTEX * BYTES_PER_FLOAT;
-    private static final String TAG = "MainActivity";
     // We keep the light always position just above the user.
     private static final float[] LIGHT_POS_IN_WORLD_SPACE = new float[] {0.0f, 2.0f, 0.0f, 1.0f};
     // All bone vertices should be same color
@@ -169,15 +175,18 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        mModelBone = new float[16];
-        mBoneNorm = new float[16];
+
         mView = new float[16];
         mModelView = new float[16];
         mModelViewProjection = new float[16];
         mCamera = new float[16];
-        Matrix.setIdentityM(mModelBone, 0);
-        Matrix.setIdentityM(mBoneNorm, 0);
 
+        if (DRAW_BONE) {
+            mModelBone = new float[16];
+            mBoneNorm = new float[16];
+            Matrix.setIdentityM(mModelBone, 0);
+            Matrix.setIdentityM(mBoneNorm, 0);
+        }
         if (DRAW_AXES) {
             mModelAxis = new float[16];
             mModelViewProjectionAxis = new float[16];
@@ -276,135 +285,136 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         mStereoCam.initRenderer();
         glutil.checkGLError("initStereoRenderer");
 
-        // Parse the SURF data file to get bone vertex, normal, and index data
-        SurfParser surfParse = new SurfParser(getResources().openRawResource(SURF_DATA));
-        surfParse.parse();
-        mNumBoneVerts = surfParse.getNumVerts();
-        mNumBoneTris = surfParse.getNumTris();
-        float [] boneVertices = surfParse.getVertices();
-        float [] boneCentroid = surfParse.getCentroid();
-        float [] boneNormals = surfParse.getNormals();
-        short [] boneIndices = surfParse.getIndices();
+        if (DRAW_BONE) {
+            // Parse the SURF data file to get bone vertex, normal, and index data
+            SurfParser surfParse = new SurfParser(getResources().openRawResource(SURF_DATA));
+            surfParse.parse();
+            mNumBoneVerts = surfParse.getNumVerts();
+            mNumBoneTris = surfParse.getNumTris();
+            float[] boneVertices = surfParse.getVertices();
+            float[] boneCentroid = surfParse.getCentroid();
+            float[] boneNormals = surfParse.getNormals();
+            short[] boneIndices = surfParse.getIndices();
 
-        Log.d("NUM VERTS", String.valueOf(surfParse.getNumVerts()));
-        Log.d("NUM TRIS", String.valueOf(surfParse.getNumTris()));
-        Log.d("CENTROID", "(" + String.valueOf(boneCentroid[0]) + ", " + String.valueOf(boneCentroid[1]) + ", " + String.valueOf(boneCentroid[2]) + ")");
-        Log.d("VERTS1", "(" + String.valueOf(boneVertices[0]) + ", " + String.valueOf(boneVertices[1]) + ", " + String.valueOf(boneVertices[2]) + ")");
-        Log.d("NORMS1", "(" + String.valueOf(boneNormals[0]) + ", " + String.valueOf(boneNormals[1]) + ", " + String.valueOf(boneNormals[2]) + ")");
-        Log.d("INDICES1", "(" + String.valueOf(boneIndices[0]) + ", " + String.valueOf(boneIndices[1]) + ", " + String.valueOf(boneIndices[2]) + ")");
-        Log.d("VERTS_LAST", "(" + String.valueOf(boneVertices[(surfParse.getNumVerts()-1)*3]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts()-1)*3 + 1]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts()-1)*3 + 2]) + ")");
-        Log.d("NORMS_LAST", "(" + String.valueOf(boneNormals[(surfParse.getNumVerts()-1)*3]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts()-1)*3 + 1]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts()-1)*3 + 2]) + ")");
-        Log.d("INDICES_LAST", "(" + String.valueOf(boneIndices[(surfParse.getNumTris()-1)*3]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris()-1)*3 + 1]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris()-1)*3 + 2]) + ")");
+            Log.d("NUM VERTS", String.valueOf(surfParse.getNumVerts()));
+            Log.d("NUM TRIS", String.valueOf(surfParse.getNumTris()));
+            Log.d("CENTROID", "(" + String.valueOf(boneCentroid[0]) + ", " + String.valueOf(boneCentroid[1]) + ", " + String.valueOf(boneCentroid[2]) + ")");
+            Log.d("VERTS1", "(" + String.valueOf(boneVertices[0]) + ", " + String.valueOf(boneVertices[1]) + ", " + String.valueOf(boneVertices[2]) + ")");
+            Log.d("NORMS1", "(" + String.valueOf(boneNormals[0]) + ", " + String.valueOf(boneNormals[1]) + ", " + String.valueOf(boneNormals[2]) + ")");
+            Log.d("INDICES1", "(" + String.valueOf(boneIndices[0]) + ", " + String.valueOf(boneIndices[1]) + ", " + String.valueOf(boneIndices[2]) + ")");
+            Log.d("VERTS_LAST", "(" + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3 + 1]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3 + 2]) + ")");
+            Log.d("NORMS_LAST", "(" + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3 + 1]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3 + 2]) + ")");
+            Log.d("INDICES_LAST", "(" + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3 + 1]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3 + 2]) + ")");
 
-        //
-        // Aggregate bone data
-        //
-        // A vertex object is structured as {vec4 position, vec4 color, vec3 normal}
-        //
-        int dataSize = mNumBoneVerts * ELEMENTS_PER_BONE_VERTEX;
-        float [] boneData = new float[dataSize];
-        for (int i = 0; i < mNumBoneVerts; i++) {
-            boneData[i * ELEMENTS_PER_BONE_VERTEX] = boneVertices[i * ELEMENTS_PER_POINT];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 1] = boneVertices[i * ELEMENTS_PER_POINT + 1];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 2] = boneVertices[i * ELEMENTS_PER_POINT + 2];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 3] = 1.0f;
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 4] = BONE_COLOR[0];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 5] = BONE_COLOR[1];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 6] = BONE_COLOR[2];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 7] = BONE_COLOR[3];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 8] = boneNormals[i * ELEMENTS_PER_NORMAL];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 9] = boneNormals[i * ELEMENTS_PER_NORMAL + 1];
-            boneData[i * ELEMENTS_PER_BONE_VERTEX + 10] = boneNormals[i * ELEMENTS_PER_NORMAL + 2];
+            //
+            // Aggregate bone data
+            //
+            // A vertex object is structured as {vec4 position, vec4 color, vec3 normal}
+            //
+            int dataSize = mNumBoneVerts * ELEMENTS_PER_BONE_VERTEX;
+            float[] boneData = new float[dataSize];
+            for (int i = 0; i < mNumBoneVerts; i++) {
+                boneData[i * ELEMENTS_PER_BONE_VERTEX] = boneVertices[i * ELEMENTS_PER_POINT];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 1] = boneVertices[i * ELEMENTS_PER_POINT + 1];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 2] = boneVertices[i * ELEMENTS_PER_POINT + 2];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 3] = 1.0f;
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 4] = BONE_COLOR[0];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 5] = BONE_COLOR[1];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 6] = BONE_COLOR[2];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 7] = BONE_COLOR[3];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 8] = boneNormals[i * ELEMENTS_PER_NORMAL];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 9] = boneNormals[i * ELEMENTS_PER_NORMAL + 1];
+                boneData[i * ELEMENTS_PER_BONE_VERTEX + 10] = boneNormals[i * ELEMENTS_PER_NORMAL + 2];
+            }
+
+            //
+            // Initialize GL elements for bone model
+            //
+
+            // make buffer for bone vertices
+            ByteBuffer bbBoneData = ByteBuffer.allocateDirect(boneData.length * BYTES_PER_FLOAT);
+            bbBoneData.order(ByteOrder.nativeOrder());
+            FloatBuffer boneDataFloatBuf = bbBoneData.asFloatBuffer();
+            boneDataFloatBuf.put(boneData);
+            boneDataFloatBuf.position(0);
+
+            // make buffer for bone indices
+            ByteBuffer bbBoneIndices = ByteBuffer.allocateDirect(boneIndices.length * BYTES_PER_SHORT);
+            bbBoneIndices.order(ByteOrder.nativeOrder());
+            ShortBuffer boneIndexShortBuffer = bbBoneIndices.asShortBuffer();
+            boneIndexShortBuffer.put(boneIndices);
+            boneIndexShortBuffer.position(0);
+
+            // init gl buffers
+            int[] buffers = new int[2];
+            GLES20.glGenBuffers(2, buffers, 0);
+            mBoneVertBuf = buffers[0];
+            mBoneIndexBuf = buffers[1];
+
+            // bind vertex buffer
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mBoneVertBuf);
+            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, boneDataFloatBuf.capacity() * BYTES_PER_FLOAT,
+                    boneDataFloatBuf, GLES20.GL_STATIC_DRAW);
+
+            // bind index buffer
+            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, mBoneIndexBuf);
+            GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, boneIndexShortBuffer.capacity() * BYTES_PER_SHORT,
+                    boneIndexShortBuffer, GLES20.GL_STATIC_DRAW);
+
+            // free buffers
+            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+
+            glutil.checkGLError("bindingBuffers");
+
+            // create and link shaders
+            int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.bone_vert);
+            int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.bone_frag);
+
+            mBoneProgram = GLES20.glCreateProgram();
+            GLES20.glAttachShader(mBoneProgram, vertexShader);
+            GLES20.glAttachShader(mBoneProgram, fragmentShader);
+
+            // MUST BIND BEFORE LINKING SHADERS
+            mBonePositionParam = 0;
+            GLES20.glBindAttribLocation(mBoneProgram, mBonePositionParam, "a_Position");
+            mBoneNormalParam = 1;
+            GLES20.glBindAttribLocation(mBoneProgram, mBoneNormalParam, "a_Normal");
+            mBoneColorParam = 2;
+            GLES20.glBindAttribLocation(mBoneProgram, mBoneColorParam, "a_Color");
+            glutil.checkGLError("binding attributes");
+
+            GLES20.glLinkProgram(mBoneProgram);
+            GLES20.glUseProgram(mBoneProgram);
+            glutil.checkGLError("Link program");
+
+            mBoneModelViewParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVMatrix");
+            mBoneModelViewProjectionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVP");
+            mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
+            glutil.checkGLError("binding uniforms");
+
+            //
+            // Initialize bone model normalization matrix
+            // We want to first translate by the negative centroid to move close to (0, 0, 0),
+            // then scale from half mm (original scale in SURF file) to m.
+            //
+            float transCent[] = new float[16];
+            Matrix.setIdentityM(transCent, 0);
+            Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
+            float scaleMat[] = new float[16];
+            Matrix.setIdentityM(scaleMat, 0);
+            float coeff = 0.0005f; // TODO is it half mm?
+            Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
+
+            Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
         }
-
-        //
-        // Initialize GL elements for bone model
-        //
-
-        // make buffer for bone vertices
-        ByteBuffer bbBoneData = ByteBuffer.allocateDirect(boneData.length * BYTES_PER_FLOAT);
-        bbBoneData.order(ByteOrder.nativeOrder());
-        FloatBuffer boneDataFloatBuf = bbBoneData.asFloatBuffer();
-        boneDataFloatBuf.put(boneData);
-        boneDataFloatBuf.position(0);
-
-        // make buffer for bone indices
-        ByteBuffer bbBoneIndices = ByteBuffer.allocateDirect(boneIndices.length * BYTES_PER_SHORT);
-        bbBoneIndices.order(ByteOrder.nativeOrder());
-        ShortBuffer boneIndexShortBuffer = bbBoneIndices.asShortBuffer();
-        boneIndexShortBuffer.put(boneIndices);
-        boneIndexShortBuffer.position(0);
-
-        // init gl buffers
-        int [] buffers = new int[2];
-        GLES20.glGenBuffers(2, buffers, 0);
-        mBoneVertBuf = buffers[0];
-        mBoneIndexBuf = buffers[1];
-
-        // bind vertex buffer
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mBoneVertBuf);
-        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, boneDataFloatBuf.capacity()*BYTES_PER_FLOAT,
-                boneDataFloatBuf, GLES20.GL_STATIC_DRAW);
-
-        // bind index buffer
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, mBoneIndexBuf);
-        GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, boneIndexShortBuffer.capacity()*BYTES_PER_SHORT,
-                boneIndexShortBuffer, GLES20.GL_STATIC_DRAW);
-
-        // free buffers
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-        glutil.checkGLError("bindingBuffers");
-
-        // create and link shaders
-        int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.bone_vert);
-        int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.bone_frag);
-
-        mBoneProgram = GLES20.glCreateProgram();
-        GLES20.glAttachShader(mBoneProgram, vertexShader);
-        GLES20.glAttachShader(mBoneProgram, fragmentShader);
-
-        // MUST BIND BEFORE LINKING SHADERS
-        mBonePositionParam = 0;
-        GLES20.glBindAttribLocation(mBoneProgram, mBonePositionParam, "a_Position");
-        mBoneNormalParam = 1;
-        GLES20.glBindAttribLocation(mBoneProgram, mBoneNormalParam, "a_Normal");
-        mBoneColorParam = 2;
-        GLES20.glBindAttribLocation(mBoneProgram, mBoneColorParam, "a_Color");
-        glutil.checkGLError("binding attributes");
-
-        GLES20.glLinkProgram(mBoneProgram);
-        GLES20.glUseProgram(mBoneProgram);
-        glutil.checkGLError("Link program");
-
-        mBoneModelViewParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVMatrix");
-        mBoneModelViewProjectionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVP");
-        mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
-        glutil.checkGLError("binding uniforms");
-
-        //
-        // Initialize bone model normalization matrix
-        // We want to first translate by the negative centroid to move close to (0, 0, 0),
-        // then scale from mm (original scale in SURF file) to m.
-        //
-        float transCent[] = new float[16];
-        Matrix.setIdentityM(transCent, 0);
-        Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
-        float scaleMat[] = new float[16];
-        Matrix.setIdentityM(scaleMat, 0);
-        float coeff = 0.01f; // TODO is it half mm?
-        Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
-
-        Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
-
         //
         // Now for the axis data
         //
         if (DRAW_AXES) {
             // Aggregate axis data
             // Vertex object is of the form {vec4 position, vec4 color}
-            dataSize = NUM_AXIS_VERTICES * ELEMENTS_PER_AXIS_VERTEX;
+            int dataSize = NUM_AXIS_VERTICES * ELEMENTS_PER_AXIS_VERTEX;
             float[] axisData = new float[dataSize];
             for (int i = 0; i < NUM_AXIS_VERTICES; i++) {
                 float [] curPos = {AXIS_VERTICES[i*ELEMENTS_PER_POSITION],
@@ -458,8 +468,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             glutil.checkGLError("bindingAxisBuffers");
 
             // create and link shaders
-            vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
-            fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
+            int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
+            int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
 
             mAxisProgram = GLES20.glCreateProgram();
             GLES20.glAttachShader(mAxisProgram, vertexShader);
@@ -557,28 +567,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             Matrix.translateM(trans, 0, tvec[0], tvec[1], tvec[2]);
 
             // must use rvec to find rotation matrix
-            // want to invert y and z for opengl
-//            Mat glrotvecMat = new Mat(3, 1, CvType.CV_64FC1);
-//            glrotvecMat.put(0, 0, rvecMat.get(0, 0)[0]);
-//            glrotvecMat.put(1, 0, -1 * rvecMat.get(1, 0)[0]);
-//            glrotvecMat.put(2, 0, -1 * rvecMat.get(2, 0)[0]);
-//            Mat rotMat = new Mat(3, 3, CvType.CV_64FC1);
-//            Calib3d.Rodrigues(glrotvecMat, rotMat);
-//            // build transposed gl rotation matrix
-//            float rot[] = {
-//                    (float)rotMat.get(0, 0)[0], (float)rotMat.get(1, 0)[0], (float)rotMat.get(2, 0)[0], 0.0f,
-//                    (float)rotMat.get(0, 1)[0], (float)rotMat.get(1, 1)[0], (float)rotMat.get(2, 1)[0], 0.0f,
-//                    (float)rotMat.get(0, 2)[0], (float)rotMat.get(1, 2)[0], (float)rotMat.get(2, 2)[0], 0.0f,
-//                    0.0f, 0.0f, 0.0f, 1.0f
-//            };
-            // matrix to flip y and z axes
-//            float[] cvToGl = new float[16];
-//            Matrix.setIdentityM(cvToGl, 0);
-//            cvToGl[5] = -1.0f;
-//            cvToGl[10] = -1.0f;
-//            // find gl rotation matrix flip axes
-//            float[] rot = new float[16];
-//            Matrix.multiplyMM(rot, 0, cvToGl, 0, rotCV, 0);
             // transform rotation axis to world space
             float angleRad = (float)Core.norm(rvecMat, Core.NORM_L2);
             float angle = (float)Math.toDegrees(angleRad);
@@ -599,6 +587,10 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             Matrix.multiplyMM(addScale, 0, scale, 0, basisChangeRot, 0);
             Matrix.multiplyMM(markerTransform, 0, trans, 0, addScale, 0);
 
+            if (DRAW_BONE){
+                Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
+                Log.d(TAG, "UPDATED BONE MODEL");
+            }
             if (DRAW_AXES) {
                 mModelAxis = markerTransform;
                 Log.d(TAG, "UPDATED AXIS MODEL");
@@ -608,7 +600,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         // must include normalization transform in model matrix
         // TODO THIS LINE SHOULD NOT EXIST - only for initial translation
         //Matrix.translateM(markerTransform, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
-        Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
+//        Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
 
         glutil.checkGLError("onReadyToDraw");
     }
@@ -626,9 +618,11 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         Matrix.multiplyMV(mLightPosInEyeSpace, 0, mView, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
         // Get the perspective matrix for bone model
         float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
-        Matrix.multiplyMM(mModelView, 0, mView, 0, mModelBone, 0);
-        Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
 
+        if (DRAW_BONE) {
+            Matrix.multiplyMM(mModelView, 0, mView, 0, mModelBone, 0);
+            Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
+        }
         if (DRAW_AXES) {
             // set up matrices for axes
             float [] axisMV = new float [16];
@@ -643,7 +637,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         // draw the axes
         if (DRAW_AXES) {
             drawAxes();
-        } else {
+        }
+        if (DRAW_BONE){
             // draw the bone model
             drawBone();
         }
