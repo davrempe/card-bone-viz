@@ -249,17 +249,17 @@ public class Marker extends MatOfPoint2f implements Comparable<Marker>{
 		// set the obj 3D points
 		double halfSize = sizeMeters/2.0;
 		List<Point3> objPoints = new ArrayList<Point3>();
-		// old
-//		objPoints.add(new Point3(-halfSize, halfSize,0));
-//		objPoints.add(new Point3(-halfSize, -halfSize,0));
-//		objPoints.add(new Point3( halfSize,  -halfSize,0));
-//		objPoints.add(new Point3( halfSize, halfSize,0));
+//		 old
+		objPoints.add(new Point3(-halfSize, halfSize,0));
+		objPoints.add(new Point3(-halfSize, -halfSize,0));
+		objPoints.add(new Point3( halfSize,  -halfSize,0));
+		objPoints.add(new Point3( halfSize, halfSize,0));
 
 		// new
-		objPoints.add(new Point3(-halfSize, -halfSize,0));
-		objPoints.add(new Point3(-halfSize,  halfSize,0));
-		objPoints.add(new Point3( halfSize,  halfSize,0));
-		objPoints.add(new Point3( halfSize, -halfSize,0));
+//		objPoints.add(new Point3(-halfSize, -halfSize,0));
+//		objPoints.add(new Point3(-halfSize,  halfSize,0));
+//		objPoints.add(new Point3( halfSize,  halfSize,0));
+//		objPoints.add(new Point3( halfSize, -halfSize,0));
 
 		MatOfPoint3f objPointsMat = new MatOfPoint3f();
 		objPointsMat.fromList(objPoints);

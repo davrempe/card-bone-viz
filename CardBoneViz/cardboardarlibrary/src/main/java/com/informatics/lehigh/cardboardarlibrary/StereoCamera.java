@@ -97,14 +97,15 @@ public class StereoCamera {
     private static final int COORDS_PER_VERTEX = 3;
     /** Number of bytes in a float */
     private static final int BYTES_PER_FLOAT = 4;
+    public static final float SCREEN_DEPTH = -3.0f;
     /** Vertices making up screen (just a plane of 2 triangles) */
     private final float[] SCREEN_COORDS = new float[] {
-            -1.78f, 1.0f, -2.25f,
-            -1.78f, -1.0f, -2.25f,
-            1.78f, 1.0f, -2.25f,
-            -1.78f, -1.0f, -2.25f,
-            1.78f, -1.0f, -2.25f,
-            1.78f, 1.0f, -2.25f
+            -1.78f, 1.0f, SCREEN_DEPTH,
+            -1.78f, -1.0f, SCREEN_DEPTH,
+            1.78f, 1.0f, SCREEN_DEPTH,
+            -1.78f, -1.0f, SCREEN_DEPTH,
+            1.78f, -1.0f, SCREEN_DEPTH,
+            1.78f, 1.0f, SCREEN_DEPTH
     };
     /** Texture coordinates for the screen plane */
     private static final float[] SCREEN_TEX_COORDS = new float [] {
@@ -334,7 +335,7 @@ public class StereoCamera {
                 rightVec[2], upVec[2], -forwardVec[2], 0.0f,
                 0.0f, 0.0f, 0.0f, 1.0f
         };
-        // a = M^T * b where b is vector representation in cardboard basis
+        // a = M^T * b where b is vector representation in cardboard basis (including negated Z)
         float[] mt = new float[16];
         Matrix.transposeM(mt, 0, m, 0);
         mModelScreen = mt;

@@ -24,8 +24,7 @@ import com.informatics.lehigh.cardboardarlibrary.GLUtil;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.calib3d.Calib3d;
-import org.opencv.core.CvType;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 
 import java.nio.ByteBuffer;
@@ -58,7 +57,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final float[] LIGHT_POS_IN_WORLD_SPACE = new float[] {0.0f, 2.0f, 0.0f, 1.0f};
     // All bone vertices should be same color
     private static final float[] BONE_COLOR = new float [] {1.0f, 0.0f, 0.0f, 1.0f};
-    private static final float[] BONE_INIT_POS = new float[] {0.25f, 0.0f, -1.5f};
+    private static final float[] BONE_INIT_POS = new float[] {0.25f, 0.0f, -2.5f};
     // Axis drawing properties
     //
     // CHANGE DRAW AXIS SETTING HERE
@@ -66,13 +65,15 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final boolean DRAW_AXES = true;
     private static final int NUM_AXIS_VERTICES = 6;
     private static final float AXIS_LENGTH = 0.02f;
+    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.3f;
+    // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
-            0.0f, 0.0f, 0.0f, 1.0f, // x axis
-            AXIS_LENGTH, 0.0f, 0.0f, 1.0f,
-            0.0f, 0.0f, 0.0f, 1.0f, // y axis
-            0.0f, AXIS_LENGTH, 0.0f, 1.0f,
-            0.0f, 0.0f, 0.0f, 1.0f, // z axis
-            0.0f, 0.0f, AXIS_LENGTH, 1.0f
+            -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
+            AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f,
+            -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // y axis
+            -AXIS_LENGTH / 2.0f, -AXIS_LENGTH / 2.0f, 0.0f, 1.0f,
+            -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // z axis
+            -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, AXIS_LENGTH, 1.0f
     };
     private static final int ELEMENTS_PER_AXIS_VERTEX = ELEMENTS_PER_POSITION + ELEMENTS_PER_COLOR;
     private static final int AXIS_STRIDE = ELEMENTS_PER_AXIS_VERTEX * BYTES_PER_FLOAT;
@@ -392,7 +393,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
         float scaleMat[] = new float[16];
         Matrix.setIdentityM(scaleMat, 0);
-        float coeff = 0.01f;
+        float coeff = 0.01f; // TODO is it half mm?
         Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
 
         Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
@@ -517,18 +518,17 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             tvecCam[2] = -(float) tvecMat.get(2, 0)[0];
             tvecCam[3] = 1.0f;
 
-            // TODO ADJUST THIS IF NECESSARY
             // adjust z so not too close to camera
             // update x and y accordingly
             // must move away in cardboard -z as well as properly scale so this translation isn't noticed
             float xRatio = tvecCam[0] / Math.abs(tvecCam[2]);
             float yRatio = tvecCam[1] / Math.abs(tvecCam[2]);
             float scaleRatio = 1.0f / Math.abs(tvecCam[2]);
-            float distToMoveZ = Math.abs(Math.abs(tvecCam[2]) - Math.abs(BONE_INIT_POS[2]));
+            float distToMoveZ = Math.abs(Math.abs(tvecCam[2]) - Math.abs(AXIS_DEPTH));
             float adjustX = distToMoveZ * xRatio;
             float adjustY = distToMoveZ * yRatio;
             float scaleFact = distToMoveZ * scaleRatio;
-            float adjustZ = (BONE_INIT_POS[2] <= tvecCam[2] ? -distToMoveZ : distToMoveZ); // actually moves to the initial Z position
+            float adjustZ = (AXIS_DEPTH <= tvecCam[2] ? -distToMoveZ : distToMoveZ); // actually moves to the initial Z position
             tvecCam[0] += adjustX;
             tvecCam[1] += adjustY;
             tvecCam[2] += adjustZ;
@@ -558,19 +558,19 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
             // must use rvec to find rotation matrix
             // want to invert y and z for opengl
-            Mat glrotvecMat = new Mat(3, 1, CvType.CV_64FC1);
-            glrotvecMat.put(0, 0, rvecMat.get(0, 0)[0]);
-            glrotvecMat.put(1, 0, -1 * rvecMat.get(1, 0)[0]);
-            glrotvecMat.put(2, 0, -1 * rvecMat.get(2, 0)[0]);
-            Mat rotMat = new Mat(3, 3, CvType.CV_64FC1);
-            Calib3d.Rodrigues(glrotvecMat, rotMat);
-            // build transposed gl rotation matrix
-            float rot[] = {
-                    (float)rotMat.get(0, 0)[0], (float)rotMat.get(1, 0)[0], (float)rotMat.get(2, 0)[0], 0.0f,
-                    (float)rotMat.get(0, 1)[0], (float)rotMat.get(1, 1)[0], (float)rotMat.get(2, 1)[0], 0.0f,
-                    (float)rotMat.get(0, 2)[0], (float)rotMat.get(1, 2)[0], (float)rotMat.get(2, 2)[0], 0.0f,
-                    0.0f, 0.0f, 0.0f, 1.0f
-            };
+//            Mat glrotvecMat = new Mat(3, 1, CvType.CV_64FC1);
+//            glrotvecMat.put(0, 0, rvecMat.get(0, 0)[0]);
+//            glrotvecMat.put(1, 0, -1 * rvecMat.get(1, 0)[0]);
+//            glrotvecMat.put(2, 0, -1 * rvecMat.get(2, 0)[0]);
+//            Mat rotMat = new Mat(3, 3, CvType.CV_64FC1);
+//            Calib3d.Rodrigues(glrotvecMat, rotMat);
+//            // build transposed gl rotation matrix
+//            float rot[] = {
+//                    (float)rotMat.get(0, 0)[0], (float)rotMat.get(1, 0)[0], (float)rotMat.get(2, 0)[0], 0.0f,
+//                    (float)rotMat.get(0, 1)[0], (float)rotMat.get(1, 1)[0], (float)rotMat.get(2, 1)[0], 0.0f,
+//                    (float)rotMat.get(0, 2)[0], (float)rotMat.get(1, 2)[0], (float)rotMat.get(2, 2)[0], 0.0f,
+//                    0.0f, 0.0f, 0.0f, 1.0f
+//            };
             // matrix to flip y and z axes
 //            float[] cvToGl = new float[16];
 //            Matrix.setIdentityM(cvToGl, 0);
@@ -579,13 +579,25 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 //            // find gl rotation matrix flip axes
 //            float[] rot = new float[16];
 //            Matrix.multiplyMM(rot, 0, cvToGl, 0, rotCV, 0);
+            // transform rotation axis to world space
+            float angleRad = (float)Core.norm(rvecMat, Core.NORM_L2);
+            float angle = (float)Math.toDegrees(angleRad);
+            float rvecCam[] = {(float)rvecMat.get(0, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(1, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(2, 0)[0] / angleRad, 0.0f};
+            float rvec[] = new float[4];
+            Matrix.multiplyMV(rvec, 0, mt, 0, rvecCam, 0);
+            // Build rotation matrix
+            float rot[] = new float[16];
+            Matrix.setIdentityM(rot, 0);
+            Matrix.rotateM(rot, 0, angle, rvec[0], rvec[1], rvec[2]);
 
-            // multiply together
+            // TODO get the coordinates together better to avoid unnecessary multiplications
+            // multiply together, we want v' = TSRM^T v
            // markerTransform = trans;
-            float[] rotScale = new float[16];
-            Matrix.multiplyMM(rotScale, 0, rot, 0, scale, 0);
-            // TODO figure out rotation
-            Matrix.multiplyMM(markerTransform, 0, trans, 0, rotScale, 0);
+            float[] basisChangeRot = new float[16];
+            float[] addScale = new float[16];
+            Matrix.multiplyMM(basisChangeRot, 0, rot, 0, mt, 0);
+            Matrix.multiplyMM(addScale, 0, scale, 0, basisChangeRot, 0);
+            Matrix.multiplyMM(markerTransform, 0, trans, 0, addScale, 0);
 
             if (DRAW_AXES) {
                 mModelAxis = markerTransform;
