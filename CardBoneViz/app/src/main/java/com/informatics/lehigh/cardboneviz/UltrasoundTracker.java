@@ -93,6 +93,8 @@ public class UltrasoundTracker implements Runnable {
                 camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
                 markerDetector.detect(rgba, detectedMarkers, camParams, markerSizeMeters);
                 if (detectedMarkers.size() != 0) {
+                    int testRot = detectedMarkers.get(0).getRotations();
+                    Log.i(TAG, "ROTATION ID: " + String.valueOf(testRot));
                     rvec = detectedMarkers.get(0).getRvec();
                     tvec = detectedMarkers.get(0).getTvec();
                     markerDetected = true;

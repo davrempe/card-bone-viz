@@ -50,7 +50,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     //
     // CHANGE DRAW BONE SETTING HERE
     //
-    private static final boolean DRAW_BONE = true;
+    private static final boolean DRAW_BONE = false;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */

@@ -392,8 +392,10 @@ public abstract class Utils {
 		Mat R = new Mat(3, 3, CvType.CV_64FC1);
 		Calib3d.Rodrigues(rotation, R);
 
-		codeRotation += 1;
-		rotateZAxis(rotation, codeRotation * 90);
+		if (codeRotation != 3) {
+			codeRotation += 1;
+			rotateZAxis(rotation, codeRotation * -90.0);
+		}
 	}
 
 	protected static void rotateZAxis(Mat rotation, double rotateDegrees) {
