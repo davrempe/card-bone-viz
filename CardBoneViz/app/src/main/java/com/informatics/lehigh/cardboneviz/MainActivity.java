@@ -46,13 +46,24 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
 
+    //
+    // PREFERENCES
+    //
+    /** Render the bone on detected marker */
+    private static final boolean DRAW_BONE = true;
+    /** Render the axes on detected marker */
+    private static final boolean DRAW_AXES = true;
+    /** Only render models if the marker is currently detected */
+    private static final boolean ONLY_DRAW_WHEN_DETECTED = false;
+
     // Bone drawing properties
     //
     // CHANGE DRAW BONE SETTING HERE
     //
-    private static final boolean DRAW_BONE = false;
     /** The coefficient to scale the bone model down by when rendering */
     private static final float SCALING_COEFF = 0.0005f;
+    /** Distance abover the marker for the bone to float */
+    private static final float BONE_HOVER_DIST = 0.04f;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */
@@ -65,15 +76,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final float[] LIGHT_POS_IN_WORLD_SPACE = new float[] {0.0f, 2.0f, 0.0f, 1.0f};
     // All bone vertices should be same color
     private static final float[] BONE_COLOR = new float [] {1.0f, 0.0f, 0.0f, 1.0f};
-    private static final float[] BONE_INIT_POS = new float[] {0.25f, 0.0f, -2.5f};
 
     // Axis drawing properties
     //
     // CHANGE DRAW AXIS SETTING HERE
     //
-    private static final boolean DRAW_AXES = true;
     private static final int NUM_AXIS_VERTICES = 6;
-    private static final float AXIS_LENGTH = 0.02f;
+    private static final float AXIS_LENGTH = 0.017f;
     private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.3f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
@@ -223,7 +232,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         }
 
         // initialize ultrasound wand tracker
-        mUltraTracker = new UltrasoundTracker(imgReader);
+        mUltraTracker = new UltrasoundTracker(imgReader, AXIS_LENGTH);
         mTrackingThread = new Thread(mUltraTracker);
         mTrackingThread.start();
     }
@@ -405,7 +414,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             //
             // Initialize bone model normalization matrix
             // We want to first translate by the negative centroid to move close to (0, 0, 0),
-            // then scale from half mm (original scale in SURF file) to m.
+            // then scale from _____? (original scale in SURF file) to m.
             //
             float transCent[] = new float[16];
             Matrix.setIdentityM(transCent, 0);
@@ -521,16 +530,39 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         // Build the camera matrix.
         Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
-        // calculate bone model matrix based on marker location
-        Mat tvecMat;
-        Mat rvecMat;
-        float markerTransform[] = new float [16];
-        Matrix.setIdentityM(markerTransform, 0);
+        if (mUltraTracker.isNewMarkerAvailable()) {
+            // calculate bone model matrix based on marker location
+            Mat tvecMat;
+            Mat rvecMat;
 
-        if (mUltraTracker.isMarkerDetected()) {
             Mat [] params = mUltraTracker.getMarkerParams();
             tvecMat = params[0];
             rvecMat = params[1];
+
+            // transform to world coordinates from camera
+            // create m in column major order
+            // invert forward vec because in opengl -z is forward
+            float[] m = new float[] {
+                    rightVec[0], upVec[0], -forwardVec[0], 0.0f,
+                    rightVec[1], upVec[1], -forwardVec[1], 0.0f,
+                    rightVec[2], upVec[2], -forwardVec[2], 0.0f,
+                    0.0f, 0.0f, 0.0f, 1.0f
+            };
+            // a = M^T * b where b is vector representation in camera (cardboard) basis
+            float[] mt = new float[16];
+            Matrix.transposeM(mt, 0, m, 0);
+
+            // must use rvec to find rotation matrix
+            // transform rotation axis to world space
+            float angleRad = (float)Core.norm(rvecMat, Core.NORM_L2);
+            float angle = (float)Math.toDegrees(angleRad);
+            float rvecCam[] = {(float)rvecMat.get(0, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(1, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(2, 0)[0] / angleRad, 0.0f};
+            float rvec[] = new float[4];
+            Matrix.multiplyMV(rvec, 0, mt, 0, rvecCam, 0);
+            // Build rotation matrix
+            float rot[] = new float[16];
+            Matrix.setIdentityM(rot, 0);
+            Matrix.rotateM(rot, 0, angle, rvec[0], rvec[1], rvec[2]);
 
             // getting the translation vector is easy
             // negate y and z for opengl coordinates
@@ -559,36 +591,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             Matrix.setIdentityM(scale, 0);
             Matrix.scaleM(scale, 0, scaleFact, scaleFact, scaleFact);
 
-            // transform to world coordinates from camera
-            // create m in column major order
-            // invert forward vec because in opengl -z is forward
-            float[] m = new float[] {
-                    rightVec[0], upVec[0], -forwardVec[0], 0.0f,
-                    rightVec[1], upVec[1], -forwardVec[1], 0.0f,
-                    rightVec[2], upVec[2], -forwardVec[2], 0.0f,
-                    0.0f, 0.0f, 0.0f, 1.0f
-            };
-            // a = M^T * b where b is vector representation in camera (cardboard) basis
-            float[] mt = new float[16];
-            Matrix.transposeM(mt, 0, m, 0);
+            // transform to world coords
             float tvec[] = new float[4];
             Matrix.multiplyMV(tvec, 0, mt, 0, tvecCam, 0);
             // Build translation matrix
             float trans[] = new float[16];
             Matrix.setIdentityM(trans, 0);
             Matrix.translateM(trans, 0, tvec[0], tvec[1], tvec[2]);
-
-            // must use rvec to find rotation matrix
-            // transform rotation axis to world space
-            float angleRad = (float)Core.norm(rvecMat, Core.NORM_L2);
-            float angle = (float)Math.toDegrees(angleRad);
-            float rvecCam[] = {(float)rvecMat.get(0, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(1, 0)[0] / angleRad, -1.0f * (float)rvecMat.get(2, 0)[0] / angleRad, 0.0f};
-            float rvec[] = new float[4];
-            Matrix.multiplyMV(rvec, 0, mt, 0, rvecCam, 0);
-            // Build rotation matrix
-            float rot[] = new float[16];
-            Matrix.setIdentityM(rot, 0);
-            Matrix.rotateM(rot, 0, angle, rvec[0], rvec[1], rvec[2]);
 
             // TODO get the coordinates together better to avoid unnecessary multiplications
             // multiply together, we want v' = TSRM^T v
@@ -597,10 +606,27 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             float[] addScale = new float[16];
             Matrix.multiplyMM(basisChangeRot, 0, rot, 0, mt, 0);
             Matrix.multiplyMM(addScale, 0, scale, 0, basisChangeRot, 0);
+
+            float markerTransform[] = new float [16];
+            Matrix.setIdentityM(markerTransform, 0);
             Matrix.multiplyMM(markerTransform, 0, trans, 0, addScale, 0);
 
+            // want to translate bone so floating above marker
+            float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, BONE_HOVER_DIST, 1.0f};
+            // apply full transformation
+            float[] transBoneVec = new float[4];
+            Matrix.multiplyMV(transBoneVec, 0, markerTransform, 0, aboveSurfaceVec, 0);
+            // Build translation matrix
+            float transBone[] = new float[16];
+            Matrix.setIdentityM(transBone, 0);
+            Matrix.translateM(transBone, 0, transBoneVec[0], transBoneVec[1], transBoneVec[2]);
+
+            float markerTransformBone[] = new float [16];
+            Matrix.setIdentityM(markerTransformBone, 0);
+            Matrix.multiplyMM(markerTransformBone, 0, transBone, 0, addScale, 0);
+
             if (DRAW_BONE){
-                Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
+                Matrix.multiplyMM(mModelBone, 0, markerTransformBone, 0, mBoneNorm, 0);
                 Log.d(TAG, "UPDATED BONE MODEL");
             }
             if (DRAW_AXES) {
@@ -608,11 +634,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
                 Log.d(TAG, "UPDATED AXIS MODEL");
             }
         }
-
-        // must include normalization transform in model matrix
-        // TODO THIS LINE SHOULD NOT EXIST - only for initial translation
-        //Matrix.translateM(markerTransform, 0, BONE_INIT_POS[0], BONE_INIT_POS[1], BONE_INIT_POS[2]);
-//        Matrix.multiplyMM(mModelBone, 0, markerTransform, 0, mBoneNorm, 0);
 
         glutil.checkGLError("onReadyToDraw");
     }
@@ -645,14 +666,27 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         // draw the stereo camera
         mStereoCam.drawStereoView(mView, perspective);
 
-
-        // draw the axes
-        if (DRAW_AXES) {
-            drawAxes();
-        }
-        if (DRAW_BONE){
-            // draw the bone model
-            drawBone();
+        if (ONLY_DRAW_WHEN_DETECTED) {
+            // only draw if last frame processed produced a detected marker
+            if (mUltraTracker.isMarkerDetected()) {
+                // draw the axes
+                if (DRAW_AXES) {
+                    drawAxes();
+                }
+                if (DRAW_BONE) {
+                    // draw the bone model
+                    drawBone();
+                }
+            }
+        } else {
+            // draw the axes
+            if (DRAW_AXES) {
+                drawAxes();
+            }
+            if (DRAW_BONE) {
+                // draw the bone model
+                drawBone();
+            }
         }
     }
 

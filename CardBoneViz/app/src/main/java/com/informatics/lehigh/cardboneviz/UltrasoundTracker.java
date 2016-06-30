@@ -20,7 +20,7 @@ import es.ava.aruco.MarkerDetector;
 
 /**
  * Class for constantly processing incoming image data in order to track
- * marker on ultrasound wand. It assumes that OpenCV has already been loaded.
+ * marker on ultrasound wand. It should be run as a thread. It assumes that OpenCV has already been loaded.
  */
 public class UltrasoundTracker implements Runnable {
 
@@ -28,17 +28,28 @@ public class UltrasoundTracker implements Runnable {
 
     /** Image reader used to access current camera image */
     private ImageReader mImgReader;
+    /** The size of the marker to track in meters */
+    private float mMarkerSize;
     /** The translation vector from the most recently processed frame */
     private volatile Mat tvec;
     /** The rotation vector from the most recently processed frame */
     private volatile Mat rvec;
     /** True if the run function should be running, false otherwise */
     private volatile boolean running = true;
-    /** True if there is a marker currently detected */
+    /** True if there is new marker information available */
+    private volatile boolean newMarker = false;
+    /** True if there the last frame processed detected a marker */
     private volatile boolean markerDetected = false;
 
-    public UltrasoundTracker(ImageReader imgReader) {
+    /**
+     * Creates a new UltrasoundTracker
+     * @param imgReader - the image reader that will be used to get images from. This should be
+     *                  an incoming stream from a camera on the device.
+     * @param markerSizeMeters - the size, in meters, of the Aruco marker to be tracked.
+     */
+    public UltrasoundTracker(ImageReader imgReader, float markerSizeMeters) {
         mImgReader = imgReader;
+        mMarkerSize = markerSizeMeters;
     }
 
     /** Safely terminates the tracking process */
@@ -54,10 +65,6 @@ public class UltrasoundTracker implements Runnable {
         return tvec;
     }
 
-    public boolean isMarkerDetected() {
-        return markerDetected;
-    }
-
     /**
      * @return The rotation vector from the most recently processed frame or
      * null if no frame has been processed yet.
@@ -67,12 +74,25 @@ public class UltrasoundTracker implements Runnable {
     }
 
     /**
+     * @return true if in the last frame processed, there was a marker detected
+     */
+    public boolean isMarkerDetected() {
+        return markerDetected;
+    }
+
+    /**
+     * @return true if there is new marker information available that has not already
+     * been requested through {@link #getMarkerParams getMarkerParams}.
+     */
+    public boolean isNewMarkerAvailable() { return newMarker; }
+
+    /**
      * Returns an array of both the translation and rotation vectors
      * {tvec, rvec}
      * @return
      */
     public Mat[] getMarkerParams() {
-        markerDetected = false;
+        newMarker = false;
         return new Mat [] {tvec, rvec};
     }
 
@@ -88,26 +108,22 @@ public class UltrasoundTracker implements Runnable {
 
                 MarkerDetector markerDetector = new MarkerDetector();
                 Vector<Marker> detectedMarkers = new Vector<>();
-                float markerSizeMeters = (float) 0.02;
                 CameraParameters camParams = new CameraParameters();
                 String externalDir = Environment.getExternalStorageDirectory().toString();
                 camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
-                markerDetector.detect(rgba, detectedMarkers, camParams, markerSizeMeters);
+                markerDetector.detect(rgba, detectedMarkers, camParams, mMarkerSize);
                 if (detectedMarkers.size() != 0) {
                     int testRot = detectedMarkers.get(0).getRotations();
                     Log.d(TAG, "ROTATION ID: " + String.valueOf(testRot));
                     rvec = detectedMarkers.get(0).getRvec();
                     tvec = detectedMarkers.get(0).getTvec();
+                    newMarker = true;
                     markerDetected = true;
                     Log.i(TAG, "MARKER DETECTED");
+                } else {
+                    markerDetected = false;
                 }
 
-//                for (int i = 0; i < 10000000; i++) {
-//
-//                }
-
-                // release
-//                curImg.close();
             }
         }
     }
