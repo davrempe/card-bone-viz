@@ -51,6 +51,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     // CHANGE DRAW BONE SETTING HERE
     //
     private static final boolean DRAW_BONE = false;
+    /** The coefficient to scale the bone model down by when rendering */
+    private static final float SCALING_COEFF = 0.0005f;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */
@@ -64,6 +66,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     // All bone vertices should be same color
     private static final float[] BONE_COLOR = new float [] {1.0f, 0.0f, 0.0f, 1.0f};
     private static final float[] BONE_INIT_POS = new float[] {0.25f, 0.0f, -2.5f};
+
     // Axis drawing properties
     //
     // CHANGE DRAW AXIS SETTING HERE
@@ -154,6 +157,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private UltrasoundTracker mUltraTracker;
     /** The thread being used to run ultrasound tracking */
     private Thread mTrackingThread;
+    /** The surface to draw to for image processing purposes */
+    private Surface mProcessingSurface;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -200,14 +205,18 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
         // create surface for image processing
         Size imgSize = mStereoCam.getCameraImageSize();
+        // We give it 5 max images so stack can fill while processing top image,
+        // this allows StereoCamera to keep rendering at a high frame rate since
+        // the capture waits to finish until the images on the ImageReader stack
+        // are all closed.
         ImageReader imgReader = ImageReader.newInstance(imgSize.getWidth(), imgSize.getHeight(),
-                ImageFormat.YUV_420_888, 1);
-        Surface procSurface = imgReader.getSurface();
+                ImageFormat.YUV_420_888, 5);
+        mProcessingSurface = imgReader.getSurface();
         ArrayList<Surface> surfList = new ArrayList<Surface>();
-        surfList.add(procSurface);
+        surfList.add(mProcessingSurface);
 
         try {
-            mStereoCam.initCamera(surfList, StereoCamera.CAPTURE_ONCE_PER_FRAME);
+            mStereoCam.initCamera(surfList);
         } catch(CameraAccessException cae) {
             Log.e(TAG, "COULD NOT ACCESS CAMERA");
             cae.printStackTrace();
@@ -403,8 +412,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
             float scaleMat[] = new float[16];
             Matrix.setIdentityM(scaleMat, 0);
-            float coeff = 0.0005f; // TODO is it half mm?
-            Matrix.scaleM(scaleMat, 0, coeff, coeff, coeff);
+            Matrix.scaleM(scaleMat, 0, SCALING_COEFF, SCALING_COEFF, SCALING_COEFF);
 
             Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
         }
@@ -500,8 +508,12 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         headTransform.getForwardVector(forwardVec, 0);
         headTransform.getUpVector(upVec, 0);
         headTransform.getRightVector(rightVec, 0);
+
+        // pass in surface used for tracking processing
+        ArrayList<Surface> surfList = new ArrayList<Surface>();
+        surfList.add(mProcessingSurface);
         try {
-            mStereoCam.updateStereoView(rightVec, upVec, forwardVec);
+            mStereoCam.updateStereoView(surfList, rightVec, upVec, forwardVec);
         } catch(CameraAccessException cae) {
             Log.e(TAG, "COULDN'T ACCESS CAMERA ON REFRESH");
         }

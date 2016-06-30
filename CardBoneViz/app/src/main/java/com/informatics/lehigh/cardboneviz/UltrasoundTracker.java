@@ -84,6 +84,7 @@ public class UltrasoundTracker implements Runnable {
             if (curImg != null) {
                 //Log.d(TAG, "PROCESSING FRAME");
                 Mat rgba = getCvColorImage(curImg);
+                curImg.close();
 
                 MarkerDetector markerDetector = new MarkerDetector();
                 Vector<Marker> detectedMarkers = new Vector<>();
@@ -94,15 +95,19 @@ public class UltrasoundTracker implements Runnable {
                 markerDetector.detect(rgba, detectedMarkers, camParams, markerSizeMeters);
                 if (detectedMarkers.size() != 0) {
                     int testRot = detectedMarkers.get(0).getRotations();
-                    Log.i(TAG, "ROTATION ID: " + String.valueOf(testRot));
+                    Log.d(TAG, "ROTATION ID: " + String.valueOf(testRot));
                     rvec = detectedMarkers.get(0).getRvec();
                     tvec = detectedMarkers.get(0).getTvec();
                     markerDetected = true;
                     Log.i(TAG, "MARKER DETECTED");
                 }
 
+//                for (int i = 0; i < 10000000; i++) {
+//
+//                }
+
                 // release
-                curImg.close();
+//                curImg.close();
             }
         }
     }

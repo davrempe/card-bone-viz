@@ -18,6 +18,7 @@ import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Handler;
 import android.os.Looper;
+import android.support.annotation.NonNull;
 import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
@@ -25,6 +26,7 @@ import android.view.Surface;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.microedition.khronos.opengles.GL10;
@@ -39,9 +41,6 @@ import javax.microedition.khronos.opengles.GL10;
 public class StereoCamera {
 
     private static final String TAG = "StereoCamera";
-
-    public static final int CAPTURE_ONCE_PER_FRAME = 0;
-    public static final int CAPTURE_CONTINUOUSLY = 1;
 
     //
     // OpenGL-related members
@@ -60,7 +59,7 @@ public class StereoCamera {
     private int mScreenPositionParam;
     /** Attribute location for screen texture */
     private int mScreenTextureParam;
-    /** Attribute location for MovelViewProjection matrix */
+    /** Attribute location for ModelViewProjection matrix */
     private int mScreenModelViewProjectionParam;
     /** ID of screen texture that holds camera feed */
     private int mScreenTextureID;
@@ -74,7 +73,7 @@ public class StereoCamera {
     /** The camera manager */
     private CameraManager mCamManager;
     /** ID of the front facing camera */
-    String mCameraID = "";
+    private String mCameraID = "";
     /** The front-facing camera */
     private CameraDevice mCameraDevice;
     /** Capture session related to front-facing camera */
@@ -87,8 +86,10 @@ public class StereoCamera {
     private SurfaceTexture mSurfaceTexture;
     /** Callback function for camera capture */
     private CameraCaptureSession.CaptureCallback mCapCall;
-    /** Setting for capture frequency */
-    private int mCapSetting;
+    /** The GL texture surface to draw camera view to */
+    private Surface mGlSurface;
+    /** List of possible additional surfaces to draw to besides GL surface */
+    private List<Surface> mPossibleAddSurfaces;
 
     //
     // CONSTANTS
@@ -97,7 +98,7 @@ public class StereoCamera {
     private static final int COORDS_PER_VERTEX = 3;
     /** Number of bytes in a float */
     private static final int BYTES_PER_FLOAT = 4;
-    public static final float SCREEN_DEPTH = -3.0f;
+    public static final float SCREEN_DEPTH = -2.9f;
     /** Vertices making up screen (just a plane of 2 triangles) */
     private final float[] SCREEN_COORDS = new float[] {
             -1.78f, 1.0f, SCREEN_DEPTH,
@@ -119,7 +120,7 @@ public class StereoCamera {
 
     /**
      * Creates a new StereoCamera object.
-     * Use {@link #initCamera initCamera} and {@link #initRenderer initRenderer} to initialize the stereo camera.
+     * Use {@link #initRenderer initRenderer} then {@link #initCamera initCamera} to initialize the stereo camera.
      * @param activity - Activity used to access camera services.
      */
     public StereoCamera(Activity activity) {
@@ -145,8 +146,8 @@ public class StereoCamera {
             // get the output resolution from camera
             mPreviewSize = sizes[0];
 
-            int formats[] = streamMap.getOutputFormats();
-            int first = formats[0];
+            // TODO create screen vertices based on camera resolution
+
         } catch (CameraAccessException cae) {
             Log.e(TAG, "COULD NOT ACCESS CAMERA");
         }
@@ -155,13 +156,14 @@ public class StereoCamera {
   /**
    * Initilaizes the stereo camera by opening the front facing camera device
    * and binding it's data to a GL plane facing the viewer, as well as any additional
-   * Surfaces provided.
-   * @param addSurfaces - Additional surfaces to draw the camera image to. This may be any Surface detailed
+   * Surfaces provided. By default, captured images default to auto-focus and white-balance, but
+   * this may be changed by using {@link #setCaptureParam setCaptureParam}.
+   * @param addSurfaces - Additional surfaces to draw the camera image to. You must include ALL surfaces you plan
+   *                    to draw the camera image to even if you won't do it every frame. This may be any Surface detailed
    *                    in {@link android.hardware.camera2.CameraDevice#createCaptureSession createCaptureSession}.
-   * @param captureSetting - Tells the StereoCamera what capture mode to use: CAPTURE_ONCE_PER_FRAME or CAPTURE_CONTINUOUSLY.
    */
-  public void initCamera(final List<Surface> addSurfaces, int captureSetting) throws CameraAccessException {
-        mCapSetting = captureSetting;
+  public void initCamera(List<Surface> addSurfaces) throws CameraAccessException {
+       mPossibleAddSurfaces = addSurfaces;
 
         //
         // First initialize all callback functions
@@ -187,15 +189,6 @@ public class StereoCamera {
                 mCameraCaptureSession = session;
                 // automatically focus and white-balance
                 mPreviewBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-
-                // repeatedly capture current frame as app runs
-                if (mCapSetting == CAPTURE_CONTINUOUSLY) {
-                    try {
-                        mCameraCaptureSession.setRepeatingRequest(mPreviewBuilder.build(), mCapCall, null);
-                    } catch (Exception e) {
-                        Log.e("Error", "capturing");
-                    }
-                }
             }
 
             @Override
@@ -213,7 +206,7 @@ public class StereoCamera {
                 // create SurfaceTexture to store images
                 mSurfaceTexture = new SurfaceTexture(mScreenTextureID);
                 mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                Surface glSurface = new Surface(mSurfaceTexture);
+                mGlSurface = new Surface(mSurfaceTexture);
 
                 try {
                     mPreviewBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -221,20 +214,17 @@ public class StereoCamera {
                     e.printStackTrace();
                 }
 
-                // add targets from user
-                for (int i = 0; i < addSurfaces.size(); i++) {
-                    mPreviewBuilder.addTarget(addSurfaces.get(i));
-                }
-                // add our gl texture target
-                mPreviewBuilder.addTarget(glSurface);
-
-                // add gl texture to surface list before creating capture session
-                addSurfaces.add(glSurface);
+                // Create list of all possible surfaces we may draw to
+                List<Surface> allSurfaces = new ArrayList<Surface>(mPossibleAddSurfaces);
+                allSurfaces.add(mGlSurface);
                 try {
-                    mCameraDevice.createCaptureSession(addSurfaces, ccCall, null);
+                    mCameraDevice.createCaptureSession(allSurfaces, ccCall, null);
                 } catch (CameraAccessException e) {
                     e.printStackTrace();
                 }
+
+                // add our gl texture target because we always draw there
+                mPreviewBuilder.addTarget(mGlSurface);
             }
             @Override
             public void onDisconnected(CameraDevice camera) {
@@ -251,7 +241,8 @@ public class StereoCamera {
     }
 
   /**
-   * Initializes rendering portion of StereoCamera. This is just a plane in 3-space called the screen
+   * Initializes rendering portion of StereoCamera. This should be called within onSurfaceCreated with other
+   * OpenGL setup required for the application. The StereoView is render using a plane in 3-space called the screen
    * which is made up of two triangles. This screen is textures with the data stream from the back-facing
    * device camera.
    */
@@ -309,22 +300,38 @@ public class StereoCamera {
     }
 
   /**
-   * Updates the stereo view with the current camera view based on the given cardboard vector parameters.
+   * Updates the stereo view and any given surfaces with the current camera view based on the given cardboard vector parameters.
+   * @param addSurfaces - additional surfaces to draw the current camera view to in addition to the default the stereo view. This MUST
+   *                    be one of the surfaces passed in when {@link #initCamera initCamera} was called.
    * @param rightVec - right vector obtained from Google's HeadTransform.getRightVector()
    * @param upVec - up vector obtained from Google's HeadTransform.getUpVector()
    * @param forwardVec - forward vector obtained from Google's HeadTransform.getForwardVector()
    */
-    public void updateStereoView(float [] rightVec, float [] upVec, float [] forwardVec) throws CameraAccessException {
+    public void updateStereoView(List<Surface> addSurfaces, float [] rightVec, float [] upVec, float [] forwardVec) throws CameraAccessException, IllegalArgumentException {
 
-        // capture image to use if capturing once per fram
-        if (mCapSetting == CAPTURE_ONCE_PER_FRAME) {
-            try {
-                mCameraCaptureSession.capture(mPreviewBuilder.build(), mCapCall, new Handler(Looper.getMainLooper()));
-            } catch (IllegalStateException ise) {
-                Log.e(TAG, "Error capturing: " + ise.getMessage());
-            } catch (IllegalArgumentException iae) {
-                Log.e(TAG, "Error capturing: " + iae.getMessage());
+        // clear previous surfaces
+        for (int i = 0; i < mPossibleAddSurfaces.size(); i++) {
+            mPreviewBuilder.removeTarget(mPossibleAddSurfaces.get(i));
+        }
+        // add current frame surfaces
+        // don't need to do GL, should already be there
+        for (int i = 0; i < addSurfaces.size(); i++) {
+            Surface toAdd = addSurfaces.get(i);
+            if (mPossibleAddSurfaces.contains(toAdd)) {
+                mPreviewBuilder.addTarget(toAdd);
+            } else {
+                // not in the list of possible
+                throw new IllegalArgumentException("Surface given is not in list of possible surfaces!");
             }
+        }
+
+        // capture image to use
+        try {
+            mCameraCaptureSession.capture(mPreviewBuilder.build(), mCapCall, new Handler(Looper.getMainLooper()));
+        } catch (IllegalStateException ise) {
+            Log.e(TAG, "Error capturing: " + ise.getMessage());
+        } catch (IllegalArgumentException iae) {
+            Log.e(TAG, "Error capturing: " + iae.getMessage());
         }
 
         // create m in column major order
@@ -335,14 +342,15 @@ public class StereoCamera {
                 rightVec[2], upVec[2], -forwardVec[2], 0.0f,
                 0.0f, 0.0f, 0.0f, 1.0f
         };
-        // a = M^T * b where b is vector representation in cardboard basis (including negated Z)
+        // a = M^T * b where b is vector representation in cardboard basis
         float[] mt = new float[16];
         Matrix.transposeM(mt, 0, m, 0);
         mModelScreen = mt;
     }
 
   /**
-   * Draws the plane with the stereo camera view in front of user
+   * Draws the plane with the stereo camera view in front of user. This
+   * should be called every time you would like the stereo view to be re-rendered.
    * @param view - the view matrix
    * @param perspective - the perpective matrix
    */
@@ -391,6 +399,18 @@ public class StereoCamera {
      */
     public Size getCameraImageSize() {
         return mPreviewSize;
+    }
+
+    /**
+     * Specifies a parameter to be used when capturing from the camera. This simply
+     * sets a capture request field to a value. The field definitions can be
+     * found in {@link CaptureRequest}.
+     * @param key The metadata field to write.
+     * @param value The value to set the field to, which must be of a matching
+     * type to the key.
+     */
+    public <T> void setCaptureParam(@NonNull CaptureRequest.Key<T> key, T value) {
+        mPreviewBuilder.set(key, value);
     }
 
 }
