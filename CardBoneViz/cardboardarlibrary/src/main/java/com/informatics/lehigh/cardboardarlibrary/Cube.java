@@ -56,6 +56,14 @@ public class Cube extends Vector<Marker> {
         return createCubeImage(markerSize, cubeConf);
     }
 
+    public Mat getRvec() {
+        return Rvec;
+    }
+
+    public Mat getTvec() {
+        return Tvec;
+    }
+
 //    public void set3dObject(Object3d object) {
 //        this.object = object;
 //        double[] matrix = new double[16];

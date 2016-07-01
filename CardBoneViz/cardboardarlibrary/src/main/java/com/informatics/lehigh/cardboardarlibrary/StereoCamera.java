@@ -81,7 +81,7 @@ public class StereoCamera {
     /** Builder for capture requests with preview quality */
     private CaptureRequest.Builder mPreviewBuilder;
     /** Size of the preview image captured */
-    private Size mPreviewSize;
+    private Size mPreviewSize = new Size(-1, -1);
     /** Surface texture attached to GL screen */
     private SurfaceTexture mSurfaceTexture;
     /** Callback function for camera capture */
@@ -98,7 +98,7 @@ public class StereoCamera {
     private static final int COORDS_PER_VERTEX = 3;
     /** Number of bytes in a float */
     private static final int BYTES_PER_FLOAT = 4;
-    public static final float SCREEN_DEPTH = -2.9f;
+    public static final float SCREEN_DEPTH = -2.6f;
     /** Vertices making up screen (just a plane of 2 triangles) */
     private final float[] SCREEN_COORDS = new float[] {
             -1.78f, 1.0f, SCREEN_DEPTH,
@@ -140,13 +140,28 @@ public class StereoCamera {
                 }
             }
 
+            // throw an error if there is not a back-facing camera
+            if (mCameraID.isEmpty()) {
+                throw new CameraAccessException(CameraAccessException.CAMERA_DISCONNECTED, "There is no back-facing camera connected to device!");
+            }
+
             CameraCharacteristics camChars = mCamManager.getCameraCharacteristics(mCameraID);
             StreamConfigurationMap streamMap = camChars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             Size[] sizes = streamMap.getOutputSizes(SurfaceTexture.class);
-            // get the output resolution from camera
-            mPreviewSize = sizes[0];
+            // go through available output sizes and choose highest one that is 16:9
+            for (int i = 0; i < sizes.length; i++) {
+                Size curSize = sizes[i];
+                if (curSize.getWidth() / 16 == curSize.getHeight() / 9) {
+                    // get the output resolution from camera
+                    mPreviewSize = sizes[i];
+                    break;
+                }
+            }
 
-            // TODO create screen vertices based on camera resolution
+            // make sure we found one
+            if (mPreviewSize.getHeight() == -1) {
+                throw new RuntimeException("Camera does not have a 16:9 resolution!");
+            }
 
         } catch (CameraAccessException cae) {
             Log.e(TAG, "COULD NOT ACCESS CAMERA");
@@ -242,8 +257,8 @@ public class StereoCamera {
 
   /**
    * Initializes rendering portion of StereoCamera. This should be called within onSurfaceCreated with other
-   * OpenGL setup required for the application. The StereoView is render using a plane in 3-space called the screen
-   * which is made up of two triangles. This screen is textures with the data stream from the back-facing
+   * OpenGL setup required for the application. The StereoView is rendered using a plane in 3-space called the screen
+   * which is made up of two triangles. This screen is textured with the data stream from the back-facing
    * device camera.
    */
   public void initRenderer() {
@@ -328,10 +343,8 @@ public class StereoCamera {
         // capture image to use
         try {
             mCameraCaptureSession.capture(mPreviewBuilder.build(), mCapCall, new Handler(Looper.getMainLooper()));
-        } catch (IllegalStateException ise) {
+        } catch (RuntimeException ise) {
             Log.e(TAG, "Error capturing: " + ise.getMessage());
-        } catch (IllegalArgumentException iae) {
-            Log.e(TAG, "Error capturing: " + iae.getMessage());
         }
 
         // create m in column major order
@@ -350,7 +363,9 @@ public class StereoCamera {
 
   /**
    * Draws the plane with the stereo camera view in front of user. This
-   * should be called every time you would like the stereo view to be re-rendered.
+   * should be called every time you would like the stereo view to be re-rendered. Both
+   * matrix arguments can be found using the Eye object passed to the onDrawEye() method
+   * of the GVR activity.
    * @param view - the view matrix
    * @param perspective - the perpective matrix
    */

@@ -45,6 +45,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final float Z_FAR = 100.0f;
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
+    private static final float PADDING_SIZE = 0.003f;
 
     //
     // PREFERENCES
@@ -232,7 +233,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         }
 
         // initialize ultrasound wand tracker
-        mUltraTracker = new UltrasoundTracker(imgReader, AXIS_LENGTH);
+        mUltraTracker = new UltrasoundTracker(imgReader, AXIS_LENGTH, PADDING_SIZE);
         mTrackingThread = new Thread(mUltraTracker);
         mTrackingThread.start();
     }
@@ -607,30 +608,45 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             Matrix.multiplyMM(basisChangeRot, 0, rot, 0, mt, 0);
             Matrix.multiplyMM(addScale, 0, scale, 0, basisChangeRot, 0);
 
-            float markerTransform[] = new float [16];
-            Matrix.setIdentityM(markerTransform, 0);
-            Matrix.multiplyMM(markerTransform, 0, trans, 0, addScale, 0);
+            float centerCubeTransform[] = new float [16];
+            Matrix.setIdentityM(centerCubeTransform, 0);
+            Matrix.multiplyMM(centerCubeTransform, 0, trans, 0, addScale, 0);
+
+            // want to translate axis so sitting on top marker
+            // because location is in center of marker cube
+            float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, (AXIS_LENGTH / 2.0f) + PADDING_SIZE, 1.0f};
+            // apply full transformation
+            float[] transAxesVec = new float[4];
+            Matrix.multiplyMV(transAxesVec, 0, centerCubeTransform, 0, aboveSurfaceVec, 0);
+            // Build translation matrix
+            float transAxes[] = new float[16];
+            Matrix.setIdentityM(transAxes, 0);
+            Matrix.translateM(transAxes, 0, transAxesVec[0], transAxesVec[1], transAxesVec[2]);
+
+            float axisTransform[] = new float [16];
+            Matrix.setIdentityM(axisTransform, 0);
+            Matrix.multiplyMM(axisTransform, 0, transAxes, 0, addScale, 0);
 
             // want to translate bone so floating above marker
-            float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, BONE_HOVER_DIST, 1.0f};
+            aboveSurfaceVec = new float[] {0.0f, 0.0f, BONE_HOVER_DIST, 1.0f};
             // apply full transformation
             float[] transBoneVec = new float[4];
-            Matrix.multiplyMV(transBoneVec, 0, markerTransform, 0, aboveSurfaceVec, 0);
+            Matrix.multiplyMV(transBoneVec, 0, axisTransform, 0, aboveSurfaceVec, 0);
             // Build translation matrix
             float transBone[] = new float[16];
             Matrix.setIdentityM(transBone, 0);
             Matrix.translateM(transBone, 0, transBoneVec[0], transBoneVec[1], transBoneVec[2]);
 
-            float markerTransformBone[] = new float [16];
-            Matrix.setIdentityM(markerTransformBone, 0);
-            Matrix.multiplyMM(markerTransformBone, 0, transBone, 0, addScale, 0);
+            float boneTransform[] = new float [16];
+            Matrix.setIdentityM(boneTransform, 0);
+            Matrix.multiplyMM(boneTransform, 0, transBone, 0, addScale, 0);
 
             if (DRAW_BONE){
-                Matrix.multiplyMM(mModelBone, 0, markerTransformBone, 0, mBoneNorm, 0);
+                Matrix.multiplyMM(mModelBone, 0, boneTransform, 0, mBoneNorm, 0);
                 Log.d(TAG, "UPDATED BONE MODEL");
             }
             if (DRAW_AXES) {
-                mModelAxis = markerTransform;
+                mModelAxis = axisTransform;
                 Log.d(TAG, "UPDATED AXIS MODEL");
             }
         }

@@ -7,6 +7,10 @@ import android.media.ImageReader;
 import android.os.Environment;
 import android.util.Log;
 
+import com.informatics.lehigh.cardboardarlibrary.Cube;
+import com.informatics.lehigh.cardboardarlibrary.CubeConfiguration;
+import com.informatics.lehigh.cardboardarlibrary.CubeDetector;
+
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
@@ -15,12 +19,10 @@ import java.nio.ByteBuffer;
 import java.util.Vector;
 
 import es.ava.aruco.CameraParameters;
-import es.ava.aruco.Marker;
-import es.ava.aruco.MarkerDetector;
 
 /**
- * Class for constantly processing incoming image data in order to track
- * marker on ultrasound wand. It should be run as a thread. It assumes that OpenCV has already been loaded.
+ * Class for constantly processing incoming image data in order to track a
+ * marker cube on ultrasound wand. It should be run as a thread. It assumes that OpenCV has already been loaded.
  */
 public class UltrasoundTracker implements Runnable {
 
@@ -30,6 +32,8 @@ public class UltrasoundTracker implements Runnable {
     private ImageReader mImgReader;
     /** The size of the marker to track in meters */
     private float mMarkerSize;
+    /** The size of the padding around the markers in meters */
+    private float mPaddingSize;
     /** The translation vector from the most recently processed frame */
     private volatile Mat tvec;
     /** The rotation vector from the most recently processed frame */
@@ -47,9 +51,10 @@ public class UltrasoundTracker implements Runnable {
      *                  an incoming stream from a camera on the device.
      * @param markerSizeMeters - the size, in meters, of the Aruco marker to be tracked.
      */
-    public UltrasoundTracker(ImageReader imgReader, float markerSizeMeters) {
+    public UltrasoundTracker(ImageReader imgReader, float markerSizeMeters, float markerPaddingSizeMeters) {
         mImgReader = imgReader;
         mMarkerSize = markerSizeMeters;
+        mPaddingSize = markerPaddingSizeMeters;
     }
 
     /** Safely terminates the tracking process */
@@ -104,19 +109,24 @@ public class UltrasoundTracker implements Runnable {
             if (curImg != null) {
                 //Log.d(TAG, "PROCESSING FRAME");
                 Mat rgba = getCvColorImage(curImg);
+                // release image immediately because we don't need it anymore
                 curImg.close();
 
-                MarkerDetector markerDetector = new MarkerDetector();
-                Vector<Marker> detectedMarkers = new Vector<>();
+                CubeDetector cubeDetector = new CubeDetector();
+                Vector<Cube> detectedCubes = new Vector<Cube>();
+                // get instrinsic camera parameters from saved calibration
                 CameraParameters camParams = new CameraParameters();
                 String externalDir = Environment.getExternalStorageDirectory().toString();
                 camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
-                markerDetector.detect(rgba, detectedMarkers, camParams, mMarkerSize);
-                if (detectedMarkers.size() != 0) {
-                    int testRot = detectedMarkers.get(0).getRotations();
-                    Log.d(TAG, "ROTATION ID: " + String.valueOf(testRot));
-                    rvec = detectedMarkers.get(0).getRvec();
-                    tvec = detectedMarkers.get(0).getTvec();
+                // create a cube configuration for our detector cube
+                // we're just using the first 6 marker id's
+                int[] ids = new int[] {1, 2, 3, 4, 5, 6};
+                CubeConfiguration cubeConfig = new CubeConfiguration(ids);
+                // now process the image for cubes
+                cubeDetector.detect(rgba, cubeConfig, detectedCubes, camParams, mMarkerSize, mPaddingSize);
+                if (detectedCubes.size() != 0) {
+                    rvec = detectedCubes.get(0).getRvec();
+                    tvec = detectedCubes.get(0).getTvec();
                     newMarker = true;
                     markerDetected = true;
                     Log.i(TAG, "MARKER DETECTED");
