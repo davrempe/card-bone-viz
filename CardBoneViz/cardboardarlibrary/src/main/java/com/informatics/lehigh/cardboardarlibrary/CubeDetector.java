@@ -79,11 +79,11 @@ public class CubeDetector {
                 rotateYAxis(tempRvec, 180);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 2) {
                 rotateXAxis(tempRvec, -90);
-                rotateZAxis(tempRvec, 90);
+                rotateZAxis(tempRvec, -90);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 3) {
-                rotateXAxis(tempRvec, 90);
-                rotateYAxis(tempRvec, 180);
-                rotateZAxis(tempRvec, 180);
+                rotateXAxis(tempRvec, -90);
+                //rotateYAxis(tempRvec, 180);
+                //rotateZAxis(tempRvec, 180);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 4) {
                 rotateXAxis(tempRvec, 90);
                 rotateYAxis(tempRvec, 180);
@@ -154,7 +154,7 @@ public class CubeDetector {
         Mat centerPoint = new Mat(3,1,CvType.CV_64FC1);
         centerPoint.put(0, 0, 0);
         centerPoint.put(1, 0, 0);
-        centerPoint.put(2, 0, -((detectedMarkers.get(0).getSize() / 2) + paddingSize));
+        centerPoint.put(2, 0, ((detectedMarkers.get(0).getSize() / 2) + paddingSize));
 
         //Setup Matrices and Variables
         Mat result = new Mat();
@@ -179,6 +179,8 @@ public class CubeDetector {
 
             //Transform CenterPoint to Cube Coordinates using Matrix Multiplication
             Core.gemm(rMat, centerPoint, 1, markerTvec, 1, result, 0);
+
+            Log.d("MainActivity", "CENTER: (" + result.get(0, 0)[0] + ", " + result.get(1, 0)[0] + ", " + result.get(2, 0)[0] + ")");
 
             //Add Coordinate Values to Total
             x += result.get(0, 0)[0];

@@ -46,6 +46,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
     private static final float PADDING_SIZE = 0.003f;
+    private static final float MARKER_SIZE = 0.017f;
 
     //
     // PREFERENCES
@@ -83,7 +84,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     // CHANGE DRAW AXIS SETTING HERE
     //
     private static final int NUM_AXIS_VERTICES = 6;
-    private static final float AXIS_LENGTH = 0.017f;
+    private static final float AXIS_LENGTH = MARKER_SIZE + PADDING_SIZE;
     private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.4f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
@@ -233,7 +234,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         }
 
         // initialize ultrasound wand tracker
-        mUltraTracker = new UltrasoundTracker(imgReader, AXIS_LENGTH, PADDING_SIZE);
+        mUltraTracker = new UltrasoundTracker(imgReader, MARKER_SIZE, PADDING_SIZE);
         mTrackingThread = new Thread(mUltraTracker);
         mTrackingThread.start();
     }
@@ -540,6 +541,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             tvecMat = params[0];
             rvecMat = params[1];
 
+            Log.d(TAG, "TVEC: (" + tvecMat.get(0, 0)[0] + ", " + tvecMat.get(1, 0)[0] + ", " + tvecMat.get(2, 0)[0] + ")");
+
             // transform to world coordinates from camera
             // create m in column major order
             // invert forward vec because in opengl -z is forward
@@ -614,9 +617,9 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
             // want to translate axis so sitting on top marker
             // because location is in center of marker cube
-            //float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, (AXIS_LENGTH / 2.0f) + PADDING_SIZE, 1.0f};
+            float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, (AXIS_LENGTH / 2.0f) + PADDING_SIZE, 1.0f};
             // TODO delete this
-            float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, 0.0f, 1.0f};
+            //float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, 0.0f, 1.0f};
             // apply full transformation
             float[] transAxesVec = new float[4];
             Matrix.multiplyMV(transAxesVec, 0, centerCubeTransform, 0, aboveSurfaceVec, 0);
@@ -649,7 +652,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             }
             if (DRAW_AXES) {
                 mModelAxis = axisTransform;
-                Log.d(TAG, "UPDATED AXIS MODEL");
+                //Log.d(TAG, "UPDATED AXIS MODEL");
             }
         }
 
