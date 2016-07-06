@@ -1,10 +1,12 @@
 package com.informatics.lehigh.cardboneviz;
 
 
+import android.content.SharedPreferences;
 import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Environment;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import com.informatics.lehigh.cardboardarlibrary.Cube;
