@@ -129,6 +129,10 @@ public class UltrasoundTracker implements Runnable {
                 if (detectedCubes.size() != 0) {
                     rvec = detectedCubes.get(0).getRvec();
                     tvec = detectedCubes.get(0).getTvec();
+//                    float[] tvecCam = new float[3];
+//                    tvecCam[0] = (float) tvec.get(0, 0)[0];
+//                    tvecCam[1] = (float) tvec.get(1, 0)[0];
+//                    tvecCam[2] = (float) tvec.get(2, 0)[0];
                     newMarker = true;
                     markerDetected = true;
                     Log.i(TAG, "MARKER DETECTED");

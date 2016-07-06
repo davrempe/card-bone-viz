@@ -51,9 +51,10 @@ public class CubeConfiguration {
     //Takes in an array of marker ids and creates a map of the id to the position they reside in
     public CubeConfiguration(int[] cubeLayout) throws InvalidParameterException{
         //TODO check that all ids are distinct
+        this.cubeLayout = new HashMap<Integer, Integer>();
 
         for (int i = 0; i < cubeLayout.length; i++) {
-            if (cubeLayout[i] < 1024) {
+            if (cubeLayout[i] > 1023 || cubeLayout[i] < 0) {
                 throw new InvalidParameterException("IDs must range from 0-1023");
             } else {
                 this.cubeLayout.put(cubeLayout[i], i);

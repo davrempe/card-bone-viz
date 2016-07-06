@@ -1,5 +1,7 @@
 package com.informatics.lehigh.cardboardarlibrary;
 
+import android.util.Log;
+
 import com.informatics.lehigh.cardboardarlibrary.Cube;
 import com.informatics.lehigh.cardboardarlibrary.CubeConfiguration;
 
@@ -22,6 +24,7 @@ import es.ava.aruco.Utils;
  * Created by Josiah Smith on 6/30/2016.
  */
 public class CubeDetector {
+    private static final String TAG = "CubeDetector";
 
     public CubeDetector() {
     }
@@ -41,11 +44,12 @@ public class CubeDetector {
         Vector<Marker> detectedMarkers = new Vector<Marker>();
         mDetector.detect(in, detectedMarkers, cp, markerSizeMeters);
         if (detectedMarkers.size() != 0) {
+            Log.d(TAG, "Cube detected with " + String.valueOf(detectedMarkers.size()) + " markers");
             Mat cubeTvec = new Mat();
             Mat cubeRvec = new Mat();
 
-            cubeTvec = calculateCubeRvec(detectedMarkers, conf);
-            cubeRvec = calculateCubeTvec(detectedMarkers, paddingSizeMeters);
+            cubeRvec = calculateCubeRvec(detectedMarkers, conf);
+            cubeTvec = calculateCubeTvec(detectedMarkers, paddingSizeMeters);
 
             Cube detectedCube = new Cube();
             detectedCube.Tvec = cubeTvec;
@@ -159,6 +163,11 @@ public class CubeDetector {
         double z = 0;
 
         for (int i = 0; i < detectedMarkers.size(); i++) {
+            Mat tvecTest = detectedMarkers.get(i).getTvec();
+            float[] tvecCam = new float[3];
+            tvecCam[0] = (float) tvecTest.get(0, 0)[0];
+            tvecCam[1] = (float) tvecTest.get(1, 0)[0];
+            tvecCam[2] = (float) tvecTest.get(2, 0)[0];
 
             //Get Marker Rotation Matrix
             Mat rMat = new Mat(3, 3, CvType.CV_64FC1);
