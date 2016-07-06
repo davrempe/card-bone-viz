@@ -52,7 +52,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     // PREFERENCES
     //
     /** Render the bone on detected marker */
-    private static final boolean DRAW_BONE = false;
+    private static final boolean DRAW_BONE = true;
     /** Render the axes on detected marker */
     private static final boolean DRAW_AXES = true;
     /** Only render models if the marker is currently detected */
@@ -618,8 +618,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             // want to translate axis so sitting on top marker
             // because location is in center of marker cube
             float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, (AXIS_LENGTH / 2.0f) + PADDING_SIZE, 1.0f};
-            // TODO delete this
-            //float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, 0.0f, 1.0f};
             // apply full transformation
             float[] transAxesVec = new float[4];
             Matrix.multiplyMV(transAxesVec, 0, centerCubeTransform, 0, aboveSurfaceVec, 0);
