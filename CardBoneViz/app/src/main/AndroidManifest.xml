@@ -36,6 +36,16 @@
                 <category android:name="com.google.intent.category.CARDBOARD" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".CameraCalibrationActivity"
+            android:label="@string/app2_name"
+            android:screenOrientation="landscape" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

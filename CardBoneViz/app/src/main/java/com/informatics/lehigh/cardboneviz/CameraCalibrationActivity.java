@@ -1,5 +1,11 @@
 package com.informatics.lehigh.cardboneviz;
 
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Environment;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -32,11 +38,13 @@ import com.informatics.lehigh.cardboneviz.calibration.OnCameraFrameRender;
 import com.informatics.lehigh.cardboneviz.calibration.PreviewFrameRender;
 import com.informatics.lehigh.cardboneviz.calibration.UndistortionFrameRender;
 
+import java.io.File;
+
 /**
  * Created by Josiah Smith on 7/5/2016.
  */
 public class CameraCalibrationActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2, View.OnTouchListener {
-    private static final String TAG = "OCVSample::Activity";
+    private static final String TAG = "CamCalibActivity";
 
     private CameraBridgeViewBase mOpenCvCameraView;
     private CameraCalibrator mCalibrator;
@@ -77,6 +85,51 @@ public class CameraCalibrationActivity extends AppCompatActivity implements Came
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.camera_calibration_java_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        //If Calibration Data already exists, ask if recalibration is desired
+        File myFile = new File(Environment.getExternalStorageDirectory().toString() + MainActivity.DATA_FILEPATH);
+        if (myFile.exists()) {
+
+            //Build AlertDialog
+            AlertDialog.Builder builder = new AlertDialog.Builder(CameraCalibrationActivity.this);
+            builder.setMessage(R.string.recalibrationQuestion);
+
+            builder.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            AlertDialog.Builder builder = new AlertDialog.Builder(CameraCalibrationActivity.this);
+                            builder.setMessage(R.string.directions);
+
+                            builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                                public void onClick(DialogInterface dialog, int id) {
+                                    //Continue CameraCalibrationActivity by doing nothing
+                                }
+                            });
+                            AlertDialog alert = builder.create();
+                            alert.show();
+                        }
+                    });
+
+            builder.setNegativeButton("No", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            Intent intent = new Intent(CameraCalibrationActivity.this, MainActivity.class);
+                            CameraCalibrationActivity.this.startActivity(intent);
+                        }
+                    });
+            AlertDialog dialog = builder.create();
+            dialog.show();
+
+        } else {
+            AlertDialog.Builder builder = new AlertDialog.Builder(CameraCalibrationActivity.this);
+            builder.setMessage(R.string.directions);
+
+            builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                    //Continue CameraCalibrationActivity by doing nothing
+                }
+            });
+            AlertDialog alert = builder.create();
+            alert.show();
+        }
     }
 
     @Override
@@ -211,6 +264,7 @@ public class CameraCalibrationActivity extends AppCompatActivity implements Came
     }
 
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+
         return mOnCameraFrameRender.render(inputFrame);
     }
 

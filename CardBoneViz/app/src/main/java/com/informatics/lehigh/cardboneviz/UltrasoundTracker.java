@@ -1,8 +1,11 @@
 package com.informatics.lehigh.cardboneviz;
 
 
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Camera;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Environment;
@@ -15,9 +18,12 @@ import com.informatics.lehigh.cardboardarlibrary.CubeDetector;
 
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
 import org.opencv.imgproc.Imgproc;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Vector;
 
 import es.ava.aruco.CameraParameters;
@@ -116,10 +122,12 @@ public class UltrasoundTracker implements Runnable {
 
                 CubeDetector cubeDetector = new CubeDetector();
                 Vector<Cube> detectedCubes = new Vector<Cube>();
+
                 // get instrinsic camera parameters from saved calibration
                 CameraParameters camParams = new CameraParameters();
                 String externalDir = Environment.getExternalStorageDirectory().toString();
-                camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
+                camParams.readFromFile(externalDir + MainActivity.DATA_FILEPATH);
+
                 // create a cube configuration for our detector cube
                 // we're just using the first 6 marker id's
                 int[] ids = new int[] {1, 2, 3, 4, 5, 6};
@@ -144,7 +152,7 @@ public class UltrasoundTracker implements Runnable {
         }
     }
 
-     /**
+    /**
      * Converts the given image to a CV RGBA Mat.
      * @param img
      * @return

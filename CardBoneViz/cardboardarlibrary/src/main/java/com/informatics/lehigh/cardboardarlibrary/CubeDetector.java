@@ -32,10 +32,10 @@ public class CubeDetector {
     /**
      * Method to find a marker cube in a given Mat frame.
      *
-     * @param in               input color Mat to find cube in.
-     * @param conf             The configuration of the cube.
-     * @param cDetected        Output Vector with detected cubes
-     * @param cp               The Camera Parameters
+     * @param in input color Mat to find cube in.
+     * @param conf The configuration of the cube.
+     * @param cDetected Output Vector with detected cubes
+     * @param cp The Camera Parameters
      * @param markerSizeMeters The marker size meters
      * @param paddingSizeMeters The size of the whitespace around each markers
      */
@@ -62,8 +62,8 @@ public class CubeDetector {
 
     /**
      * Calculates the CubeRvec based on the input detected markers
-     * @param detectedMarkers  input vector of the detected markers
-     * @param conf             the configuration of the cube to be detected
+     * @param detectedMarkers input vector of the detected markers
+     * @param conf the configuration of the cube to be detected
      * @return the Rvec of the cube
      */
     private static Mat calculateCubeRvec(Vector<Marker> detectedMarkers, CubeConfiguration conf) {
@@ -75,21 +75,21 @@ public class CubeDetector {
         for (int i = 0; i < detectedMarkers.size(); i++) {
             detectedMarkers.get(i).getRvec().copyTo(tempRvec);
             if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 1) {
-                rotateXAxis(tempRvec, 90);
-                rotateYAxis(tempRvec, 180);
+                CVUtil.rotateXAxis(tempRvec, 90);
+                CVUtil.rotateYAxis(tempRvec, 180);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 2) {
-                rotateXAxis(tempRvec, -90);
-                rotateZAxis(tempRvec, -90);
+                CVUtil.rotateXAxis(tempRvec, -90);
+                CVUtil.rotateZAxis(tempRvec, -90);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 3) {
-                rotateXAxis(tempRvec, -90);
+                CVUtil.rotateXAxis(tempRvec, -90);
                 //rotateYAxis(tempRvec, 180);
                 //rotateZAxis(tempRvec, 180);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 4) {
-                rotateXAxis(tempRvec, 90);
-                rotateYAxis(tempRvec, 180);
-                rotateZAxis(tempRvec, -90);
+                CVUtil.rotateXAxis(tempRvec, 90);
+                CVUtil.rotateYAxis(tempRvec, 180);
+                CVUtil.rotateZAxis(tempRvec, -90);
             } else if (cubeLayout.get(detectedMarkers.get(i).getMarkerId()) == 5) {
-                rotateXAxis(tempRvec, 180);
+                CVUtil.rotateXAxis(tempRvec, 180);
             }
 
             //Get Angle-Axis Representation
@@ -163,11 +163,6 @@ public class CubeDetector {
         double z = 0;
 
         for (int i = 0; i < detectedMarkers.size(); i++) {
-            Mat tvecTest = detectedMarkers.get(i).getTvec();
-            float[] tvecCam = new float[3];
-            tvecCam[0] = (float) tvecTest.get(0, 0)[0];
-            tvecCam[1] = (float) tvecTest.get(1, 0)[0];
-            tvecCam[2] = (float) tvecTest.get(2, 0)[0];
 
             //Get Marker Rotation Matrix
             Mat rMat = new Mat(3, 3, CvType.CV_64FC1);
@@ -179,8 +174,6 @@ public class CubeDetector {
 
             //Transform CenterPoint to Cube Coordinates using Matrix Multiplication
             Core.gemm(rMat, centerPoint, 1, markerTvec, 1, result, 0);
-
-            Log.d("MainActivity", "CENTER: (" + result.get(0, 0)[0] + ", " + result.get(1, 0)[0] + ", " + result.get(2, 0)[0] + ")");
 
             //Add Coordinate Values to Total
             x += result.get(0, 0)[0];
@@ -200,116 +193,4 @@ public class CubeDetector {
         cubeTvec.put(2,0,z);
         return cubeTvec;
     }
-
-
-    //Helper Methods//
-
-    /**
-     * Rotates a matrix around the X axis by the desired amount
-     * @param rotation      The matrix to be rotated
-     * @param rotateDegrees The amount to rotate in degrees
-     */
-    private static void rotateXAxis(Mat rotation, double rotateDegrees) {
-        // get the matrix corresponding to the rotation vector
-        Mat R = new Mat(3, 3, CvType.CV_64FC1);
-        Calib3d.Rodrigues(rotation, R);
-
-        // create the matrix to rotate around the X axis
-        // 1, 0, 0
-        // 0 cos -sin
-        // 0 sin cos
-        double[] rot = {
-                1, 0, 0,
-                0, Math.cos(Math.toRadians(rotateDegrees)), -Math.sin(Math.toRadians(rotateDegrees)),
-                0, Math.sin(Math.toRadians(rotateDegrees)), Math.cos(Math.toRadians(rotateDegrees))
-        };
-        // multiply both matrix
-        Mat res = new Mat(3, 3, CvType.CV_64FC1);
-        double[] prod = new double[9];
-        double[] a = new double[9];
-        R.get(0, 0, a);
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++) {
-                prod[3 * i + j] = 0;
-                for (int k = 0; k < 3; k++) {
-                    prod[3 * i + j] += a[3 * i + k] * rot[3 * k + j];
-                }
-            }
-        // convert the matrix to a vector with rodrigues back
-        res.put(0, 0, prod);
-        Calib3d.Rodrigues(res, rotation);
-    }
-
-    /**
-     * Rotates a matrix around the Y axis by the desired amount
-     * @param rotation      The matrix to be rotated
-     * @param rotateDegrees The amount to rotate in degrees
-     */
-    private static void rotateYAxis(Mat rotation, double rotateDegrees) {
-        // get the matrix corresponding to the rotation vector
-        Mat R = new Mat(3,3,CvType.CV_64FC1);
-        Calib3d.Rodrigues(rotation, R);
-
-        // create the matrix to rotate around the Y axis
-        // cos 0 sin
-        // 0   1  0
-        //-sin 0 cos
-        double[] rot = {
-                Math.cos(Math.toRadians(rotateDegrees)), 0, Math.sin(Math.toRadians(rotateDegrees)),
-                0,1,0,
-                -Math.sin(Math.toRadians(rotateDegrees)), 0, Math.cos(Math.toRadians(rotateDegrees))
-        };
-        // multiply both matrix
-        Mat res = new Mat(3,3, CvType.CV_64FC1);
-        double[] prod = new double[9];
-        double[] a = new double[9];
-        R.get(0, 0, a);
-        for(int i=0;i<3;i++)
-            for(int j=0;j<3;j++){
-                prod[3*i+j] = 0;
-                for(int k=0;k<3;k++){
-                    prod[3*i+j] += a[3*i+k]*rot[3*k+j];
-                }
-            }
-        // convert the matrix to a vector with rodrigues back
-        res.put(0, 0, prod);
-        Calib3d.Rodrigues(res, rotation);
-    }
-
-    /**
-     * Rotates a matrix around the Z axis by the desired amount
-     * @param rotation      The matrix to be rotated
-     * @param rotateDegrees The amount to rotate in degrees
-     */
-    private static void rotateZAxis(Mat rotation, double rotateDegrees) {
-        // get the matrix corresponding to the rotation vector
-        Mat R = new Mat(3,3,CvType.CV_64FC1);
-        Calib3d.Rodrigues(rotation, R);
-
-        // create the matrix to rotate around the Z axis
-        // cos -sin  0
-        // sin  cos  0
-        // 0    0    1
-        double[] rot = {
-                Math.cos(Math.toRadians(rotateDegrees)), -Math.sin(Math.toRadians(rotateDegrees)), 0,
-                Math.sin(Math.toRadians(rotateDegrees)), Math.cos(Math.toRadians(rotateDegrees)), 0,
-                0,0,1
-        };
-        // multiply both matrix
-        Mat res = new Mat(3,3, CvType.CV_64FC1);
-        double[] prod = new double[9];
-        double[] a = new double[9];
-        R.get(0, 0, a);
-        for(int i=0;i<3;i++)
-            for(int j=0;j<3;j++){
-                prod[3*i+j] = 0;
-                for(int k=0;k<3;k++){
-                    prod[3*i+j] += a[3*i+k]*rot[3*k+j];
-                }
-            }
-        // convert the matrix to a vector with rodrigues back
-        res.put(0, 0, prod);
-        Calib3d.Rodrigues(res, rotation);
-    }
-
 }

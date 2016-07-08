@@ -77,8 +77,9 @@ public abstract class Utils {
         res.put(0, 0, prod);
 		Calib3d.Rodrigues(res, rotation);
 	}
-	
-	protected static void glGetModelViewMatrix(double[] modelview_matrix, Mat Rvec, Mat Tvec)throws ExtParamException{
+
+	//Changed to public to be used in the Cube classes
+	public static void glGetModelViewMatrix(double[] modelview_matrix, Mat Rvec, Mat Tvec)throws ExtParamException{
 	    //check if parameters are valid
 	    boolean invalid=false;
 	    double[] tvec = new double[3];

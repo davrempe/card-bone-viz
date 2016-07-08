@@ -52,7 +52,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     // PREFERENCES
     //
     /** Render the bone on detected marker */
-    private static final boolean DRAW_BONE = false;
+    private static final boolean DRAW_BONE = true;
     /** Render the axes on detected marker */
     private static final boolean DRAW_AXES = true;
     /** Only render models if the marker is currently detected */
@@ -170,6 +170,8 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private Thread mTrackingThread;
     /** The surface to draw to for image processing purposes */
     private Surface mProcessingSurface;
+    /**The filepath to the Camera Calibration Data file*/
+    public static final String DATA_FILEPATH = "/CardBoneViz/camCalibData.csv";
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override

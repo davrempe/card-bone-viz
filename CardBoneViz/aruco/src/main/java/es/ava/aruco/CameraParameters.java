@@ -1,5 +1,8 @@
 package es.ava.aruco;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -7,6 +10,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.StringTokenizer;
 
 //import org.apache.commons.configuration.Configuration;
@@ -17,6 +21,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
 import org.opencv.core.Size;
 
+import es.ava.aruco.android.CameraCalibrationActivity;
 import es.ava.aruco.exceptions.CPException;
 
 /**
@@ -35,6 +40,7 @@ public class CameraParameters {
 	private Mat cameraMatrix;
 	private MatOfDouble distorsionMatrix;
 	private Size camSize;
+	private Context context;
 
 	public CameraParameters(){
 		cameraMatrix = new Mat(3,3,CvType.CV_32FC1);
@@ -75,6 +81,8 @@ public class CameraParameters {
 				current[6],          current[7],          current[8]};
 		cameraMatrix.put(0, 0, buff);
 	}
+
+//Replaced With readFromFile
 
 //	public void readFromXML(String filepath){
 //		File file = new File(filepath);
