@@ -33,7 +33,6 @@ import javax.microedition.khronos.opengles.GL10;
 
 /**
  * Allows easy access to rendering the back-facing camera view to a Google Cardboard stereo view.
- * Should be used with applications built similarly to TreasureHuntActivity Sample provided by Google.
  *
  * Simply uses OpenGL to render a plane in front of the user that is textured with the current
  * camera view.
@@ -98,7 +97,7 @@ public class StereoCamera {
     private static final int COORDS_PER_VERTEX = 3;
     /** Number of bytes in a float */
     private static final int BYTES_PER_FLOAT = 4;
-    public static final float SCREEN_DEPTH = -2.6f;
+    public static final float SCREEN_DEPTH = -3.2f;
     /** Vertices making up screen (just a plane of 2 triangles) */
     private final float[] SCREEN_COORDS = new float[] {
             -1.78f, 1.0f, SCREEN_DEPTH,

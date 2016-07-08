@@ -85,7 +85,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     //
     private static final int NUM_AXIS_VERTICES = 6;
     private static final float AXIS_LENGTH = MARKER_SIZE + PADDING_SIZE;
-    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.4f;
+    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.01f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
             -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
@@ -663,6 +663,18 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
         glutil.checkGLError("colorParam");
+
+        int[] test = new int[4];
+        eye.getViewport().getAsArray(test, 0);
+        Size newSize = mStereoCam.getCameraImageSize();
+        if (eye.getType() == 1) {
+            eye.getViewport().setViewport(0, 0, newSize.getWidth(), newSize.getHeight());
+        } else {
+            eye.getViewport().setViewport(newSize.getWidth(), 0, newSize.getWidth(), newSize.getHeight());
+        }
+        eye.getViewport().setGLViewport();
+        eye.getViewport().setGLScissor();
+        eye.getViewport().getAsArray(test, 0);
 
         // Apply the eye transformation to the camera.
         Matrix.multiplyMM(mView, 0, eye.getEyeView(), 0, mCamera, 0);
