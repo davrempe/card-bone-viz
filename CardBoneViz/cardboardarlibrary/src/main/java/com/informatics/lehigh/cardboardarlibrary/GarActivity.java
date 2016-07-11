@@ -36,7 +36,7 @@ import javax.microedition.khronos.opengles.GL10;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
+public abstract class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
 
     protected static final String TAG = "GarActivity";
 
@@ -96,6 +96,7 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
     //
     // Renderers
     //
+    CameraTextureRenderer camTexRenderer;
     StereoScreenRenderer screenRenderer;
 
 
@@ -106,6 +107,7 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
         //
         // Setup Renderers
         //
+        camTexRenderer = new CameraTextureRenderer(this);
         screenRenderer = new StereoScreenRenderer(this);
 
         //
@@ -218,6 +220,8 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
                 mCameraDevice = camera;
 
                 // create SurfaceTexture to store images
+                // (this is called after onSurfaceCreated so texture should be available)
+                // TODO possibly loop until not null in case this doesn't hold
                 mSurfaceTexture = new SurfaceTexture(mCameraTextureID);
                 mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                 mGlSurface = new Surface(mSurfaceTexture);
@@ -401,9 +405,16 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
         GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
-        // Initialize screen rendering
+        // Initialize renderers
+        camTexRenderer.init();
+        // get texture to create SurfaceTexture
+        mCameraTextureID = camTexRenderer.getCameraTexture();
         screenRenderer.init();
-        glutil.checkGLError("initStereoRenderer");
+        // give textures to use for rendering screen
+        screenRenderer.setCameraTexture(mScreenCameraTextureID);
+        screenRenderer.setObjectsTexture(mScreenObjectsTextureID);
+
+        glutil.checkGLError("initRenderers");
 
     }
 
@@ -416,10 +427,24 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
             Log.e(TAG, "Error capturing: " + ex.getMessage());
         }
 
-        //TODO draw the image to FBO texture
+        // update the camera surface texture with the new image
+        mSurfaceTexture.updateTexImage();
 
         // Update the renderers
+        camTexRenderer.update(headTransform);
         screenRenderer.update(headTransform);
+
+        // Draw current camera view to texture through frame buffer
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFboIdCamera);
+        GLES20.glViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
+
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+        float[] iden = new float[16];
+        Matrix.setIdentityM(iden, 0);
+        // don't need view or perspective so just pass in identity
+        camTexRenderer.draw(iden, iden);
+
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
         // Build the camera matrix.
         Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
@@ -429,21 +454,39 @@ public class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
 
     @Override
     public void onDrawEye(Eye eye) {
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
-
-        glutil.checkGLError("colorParam");
-
         // Apply the eye transformation to the camera.
         float[] viewMat = new float[16];
         Matrix.multiplyMM(viewMat, 0, eye.getEyeView(), 0, mCamera, 0);
         // Get the perspective matrix for bone model
         float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
 
-        // Draw every renderer
-        // TODO draw 3D scene to FBO and then actually draw stereo screen
+        // First draw object scene texture through frame buffer
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFboIdObjects);
+        GLES20.glViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
+
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+        drawObjects(viewMat, perspective);
+
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+
+        // Now draw actual screen for cardboard viewer
+        // TODO did the eye viewport get changed by changing above?
+        eye.getViewport().setGLViewport();
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         screenRenderer.draw(viewMat, perspective);
     }
+
+    /**
+     * Draws the 3D scene to be laid over the current back-facing camera view.
+     * These are the augmented portions of the application. This will be called
+     * twice per frame, one for the left eye, and again for the right. Anything
+     * drawn with an alpha value of 0.0 will be treated as background and filtered
+     * from the final render to show the camera view in the background.
+     * @param view The view matrix to use for eye being drawn.
+     * @param perspective The perspective matrix to use for the eye being drawn.
+     */
+    abstract protected void drawObjects(float[] view, float[] perspective);
 
     @Override
     public void onFinishFrame(Viewport viewport) {}

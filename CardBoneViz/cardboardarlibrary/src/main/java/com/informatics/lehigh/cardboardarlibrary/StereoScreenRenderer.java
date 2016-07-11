@@ -2,7 +2,6 @@ package com.informatics.lehigh.cardboardarlibrary;
 
 
 import android.app.Activity;
-import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.util.Log;
@@ -12,8 +11,6 @@ import com.google.vr.sdk.base.HeadTransform;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-
-import javax.microedition.khronos.opengles.GL10;
 
 public class StereoScreenRenderer implements GLRenderer {
 
@@ -61,12 +58,18 @@ public class StereoScreenRenderer implements GLRenderer {
     private int mScreenProgram;
     /** Attribute location for screen position */
     private int mScreenPositionParam;
-    /** Attribute location for screen texture */
+    /** Attribute location for screen texture coordinate */
     private int mScreenTextureParam;
+    /** Attribute location for screen camera texture */
+    private int mScreenCameraTextureParam;
+    /** Attribute location for screen objects texture */
+    private int mScreenObjectsTextureParam;
     /** Attribute location for ModelViewProjection matrix */
     private int mScreenModelViewProjectionParam;
     /** ID of screen texture that holds camera feed */
-    private int mScreenTextureID;
+    private int mScreenCameraTextureID;
+    /** ID of screen texture that holds the 3d objects screne */
+    private int mScreenObjectsTextureID;
     /** GLUtil instance */
     private GLUtil glutil;
 
@@ -95,22 +98,7 @@ public class StereoScreenRenderer implements GLRenderer {
         mScreenTexBuf.put(SCREEN_TEX_COORDS);
         mScreenTexBuf.position(0);
 
-        // TODO don't need this texture here, just need to take in the screen and 3d objects tex
-        // make camera texture
-        int[] textures = new int[1];
-        // Generate the texture to where android view will be rendered
-        GLES20.glGenTextures(1, textures, 0);
-        glutil.checkGLError("Texture generate");
-        mScreenTextureID = textures[0];
-
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mScreenTextureID);
-        glutil.checkGLError("Texture bind");
-
-        GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_MIN_FILTER,GL10.GL_NEAREST);
-        GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_MAG_FILTER, GL10.GL_LINEAR);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_WRAP_S, GL10.GL_CLAMP_TO_EDGE);
-        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_WRAP_T, GL10.GL_CLAMP_TO_EDGE);
-
+        // compile shaders
         int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.screen_vert);
         int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.screen_frag);
 
@@ -131,6 +119,8 @@ public class StereoScreenRenderer implements GLRenderer {
         glutil.checkGLError("Screen program");
 
         mScreenModelViewProjectionParam = GLES20.glGetUniformLocation(mScreenProgram, "u_MVP");
+        mScreenCameraTextureParam = GLES20.glGetUniformLocation(mScreenProgram, "u_cameraTexture");
+        mScreenObjectsTextureParam = GLES20.glGetUniformLocation(mScreenProgram, "u_objectsTexture");
 
         glutil.checkGLError("screen program params");
     }
@@ -158,6 +148,14 @@ public class StereoScreenRenderer implements GLRenderer {
         mModelScreen = mt;
     }
 
+    /**
+     * Draws a 3D screen in front of the user that is textured with the live camera
+     * feed and provided scene objects.
+     * {@link #setCameraTexture setCameraTexture} and {@link #setObjectsTexture setObjectsTexture}
+     * should be called before using method.
+     * @param view The 4x4 view matrix to use for rendering.
+     * @param perspective The 4x4 projection matrix to user for rendering.
+     */
     @Override
     public void draw(float[] view, float[] perspective) {
         // get modelview matrix
@@ -170,11 +168,14 @@ public class StereoScreenRenderer implements GLRenderer {
         glutil.checkGLError("using screen program");
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mScreenTextureID);
-        glutil.checkGLError("binding uniform texture");
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenCameraTextureID);
+        GLES20.glUniform1i(mScreenCameraTextureParam, 0);
+        glutil.checkGLError("binding camera texture");
 
-        // TODO what to do with this?
-        //mSurfaceTexture.updateTexImage();
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenObjectsTextureID);
+        GLES20.glUniform1i(mScreenObjectsTextureParam, 0);
+        glutil.checkGLError("binding objects texture");
 
         // Set the position of the screen
         GLES20.glVertexAttribPointer(mScreenPositionParam, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, mScreenVertBuf);
@@ -197,6 +198,23 @@ public class StereoScreenRenderer implements GLRenderer {
         glutil.checkGLError("Drawing bill");
 
         // free texture
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+    }
+
+    /**
+     * Sets the texture to be used for the back-facing camera feed when rendering.
+     * @param cameraTexId
+     */
+    public void setCameraTexture(int cameraTexId) {
+        mScreenCameraTextureID = cameraTexId;
+    }
+
+    /**
+     * Sets the texture to be used for the 3D objects scene to render on top
+     * of the camera feed.
+     * @param objectsTexId
+     */
+    public void setObjectsTexture(int objectsTexId) {
+        mScreenObjectsTextureID = objectsTexId;
     }
 }

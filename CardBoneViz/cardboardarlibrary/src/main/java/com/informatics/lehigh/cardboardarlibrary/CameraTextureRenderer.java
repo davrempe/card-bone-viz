@@ -66,6 +66,16 @@ public class CameraTextureRenderer implements GLRenderer {
      */
     @Override
     public void draw(float[] view, float[] perspective) {
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mScreenTextureID);
+        glutil.checkGLError("binding uniform texture");
+    }
 
+    /**
+     * @return the ID of the texture that camera feed should be drawn to using
+     * a SurfaceTexture.
+     */
+    public int getCameraTexture() {
+        return mScreenTextureID;
     }
 }

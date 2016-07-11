@@ -1,13 +1,10 @@
-// important to include in order to use rendered Android View to gl texture
-#extension GL_OES_EGL_image_external : require
-
-//make sure to use samplerExternalOES instead of sampler2D
-uniform samplerExternalOES u_Texture;    // The input texture.
+uniform sampler2D u_cameraTexture;    // The input camera feed texture.
+uniform sampler2D u_objectsTexture;    // The input objects scene texture.
 
 precision mediump float;
 
 varying vec2 v_TexCoordinate;
 
 void main() {
-    gl_FragColor = texture2D(u_Texture, v_TexCoordinate);
+    gl_FragColor = texture2D(c_Texture, v_TexCoordinate);
 }
