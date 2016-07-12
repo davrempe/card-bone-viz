@@ -1,17 +1,25 @@
 package com.informatics.lehigh.cardboneviz;
 
+import android.graphics.ImageFormat;
+import android.hardware.camera2.CameraAccessException;
+import android.media.ImageReader;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
+import android.view.Surface;
 
+import com.google.vr.sdk.base.Eye;
+import com.google.vr.sdk.base.GvrActivity;
+import com.google.vr.sdk.base.GvrView;
 import com.google.vr.sdk.base.HeadTransform;
 import com.google.vr.sdk.base.Viewport;
 
 import javax.microedition.khronos.egl.EGLConfig;
 
-import com.informatics.lehigh.cardboardarlibrary.GarActivity;
 import com.informatics.lehigh.cardboardarlibrary.StereoCamera;
+import com.informatics.lehigh.cardboardarlibrary.GLUtil;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
@@ -23,15 +31,18 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
 
-public class MainActivity extends GarActivity {
+public class OldActivity extends GvrActivity implements GvrView.StereoRenderer {
 
     //
     // CONSTANTS
     //
     private static final String TAG = "MainActivity";
     private static final int SURF_DATA = R.raw.data1;
-
+    private static final float CAMERA_Z = 0.01f;
+    private static final float Z_NEAR = 0.1f;
+    private static final float Z_FAR = 100.0f;
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
     private static final float PADDING_SIZE = 0.003f;
@@ -94,10 +105,14 @@ public class MainActivity extends GarActivity {
     private float[] mModelBone;
     /** Matrix that translates bone model to about origin and scales to meters */
     private float[] mBoneNorm;
+    /** View matrix */
+    private float[] mView;
     /** ModelView matrix */
     private float[] mModelView;
     /** ModelViewProjection matrix */
     private float[] mModelViewProjection;
+    /** Camera matrix */
+    private float[] mCamera;
     /** vector for light position in eye space */
     private final float[] mLightPosInEyeSpace = new float[4];
     /** number of vertices that make up bone model */
@@ -122,6 +137,8 @@ public class MainActivity extends GarActivity {
     private int mBoneModelViewProjectionParam;
     /** Attribute location for light position */
     private int mBoneLightPositionParam;
+    /** GLUtil instance */
+    private GLUtil glutil;
 
     //
     // Draw axis-related members
@@ -145,10 +162,14 @@ public class MainActivity extends GarActivity {
     //
     // MISC
     //
+    /** Renders stereo-view of back-facing phone camera */
+    private StereoCamera mStereoCam;
     /** Image processor to track ultrasound wand location */
     private UltrasoundTracker mUltraTracker;
     /** The thread being used to run ultrasound tracking */
     private Thread mTrackingThread;
+    /** The surface to draw to for image processing purposes */
+    private Surface mProcessingSurface;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -170,8 +191,11 @@ public class MainActivity extends GarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+
+        mView = new float[16];
         mModelView = new float[16];
         mModelViewProjection = new float[16];
+        mCamera = new float[16];
 
         if (DRAW_BONE) {
             mModelBone = new float[16];
@@ -185,10 +209,57 @@ public class MainActivity extends GarActivity {
             Matrix.setIdentityM(mModelAxis, 0);
         }
 
+        mStereoCam = new StereoCamera(this);
+        glutil = new GLUtil(getResources());
+
+        initializeGvrView();
+
+        // create surface for image processing
+        Size imgSize = mStereoCam.getCameraImageSize();
+        // We give it 5 max images so stack can fill while processing top image,
+        // this allows StereoCamera to keep rendering at a high frame rate since
+        // the capture waits to finish until the images on the ImageReader stack
+        // are all closed.
+        ImageReader imgReader = ImageReader.newInstance(imgSize.getWidth(), imgSize.getHeight(),
+                ImageFormat.YUV_420_888, 5);
+        mProcessingSurface = imgReader.getSurface();
+        ArrayList<Surface> surfList = new ArrayList<Surface>();
+        surfList.add(mProcessingSurface);
+
+        try {
+            mStereoCam.initCamera(surfList);
+        } catch(CameraAccessException cae) {
+            Log.e(TAG, "COULD NOT ACCESS CAMERA");
+            cae.printStackTrace();
+        }
+
         // initialize ultrasound wand tracker
-        mUltraTracker = new UltrasoundTracker(getProcessingReader(), MARKER_SIZE, PADDING_SIZE);
+        mUltraTracker = new UltrasoundTracker(imgReader, MARKER_SIZE, PADDING_SIZE);
         mTrackingThread = new Thread(mUltraTracker);
         mTrackingThread.start();
+    }
+
+    public void initializeGvrView() {
+        setContentView(R.layout.common_ui);
+
+        GvrView gvrView = (GvrView) findViewById(R.id.gvr_view);
+        gvrView.setEGLConfigChooser(8, 8, 8, 8, 16, 8);
+
+        gvrView.setRenderer(this);
+        gvrView.setTransitionViewEnabled(true);
+        gvrView.setOnCardboardBackButtonListener(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        onBackPressed();
+                    }
+                });
+        setGvrView(gvrView);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
     }
 
     @Override
@@ -204,9 +275,13 @@ public class MainActivity extends GarActivity {
     }
 
     @Override
+    public void onSurfaceChanged(int i, int i1) {
+        Log.i(TAG, "onSurfaceChanged");
+    }
+
+    @Override
     public void onRendererShutdown() {
         Log.i(TAG, "onRendererShutdown");
-        super.onRendererShutdown();
 
         //
         // cleanup
@@ -223,8 +298,12 @@ public class MainActivity extends GarActivity {
 
     @Override
     public void onSurfaceCreated(EGLConfig eglConfig) {
-        super.onSurfaceCreated(eglConfig);
         Log.i(TAG, "onSurfaceCreated");
+        GLES20.glClearColor(0.1f, 0.1f, 0.1f, 0.5f);
+
+        // Initialize stereo camera rendering
+        mStereoCam.initRenderer();
+        glutil.checkGLError("initStereoRenderer");
 
         if (DRAW_BONE) {
             // Parse the SURF data file to get bone vertex, normal, and index data
@@ -358,9 +437,9 @@ public class MainActivity extends GarActivity {
             float[] axisData = new float[dataSize];
             for (int i = 0; i < NUM_AXIS_VERTICES; i++) {
                 float [] curPos = {AXIS_VERTICES[i*ELEMENTS_PER_POSITION],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 1],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 2],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 3]};
+                        AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 1],
+                        AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 2],
+                        AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 3]};
                 axisData[i * ELEMENTS_PER_AXIS_VERTEX] = curPos[0];
                 axisData[i * ELEMENTS_PER_AXIS_VERTEX + 1] = curPos[1];
                 axisData[i * ELEMENTS_PER_AXIS_VERTEX + 2] = curPos[2];
@@ -416,9 +495,9 @@ public class MainActivity extends GarActivity {
             GLES20.glAttachShader(mAxisProgram, fragmentShader);
 
             // MUST BIND BEFORE LINKING SHADERS
-            mAxisPositionParam = 0;
+            mAxisPositionParam = 3;
             GLES20.glBindAttribLocation(mAxisProgram, mAxisPositionParam, "a_Position");
-            mAxisColorParam = 1;
+            mAxisColorParam = 4;
             GLES20.glBindAttribLocation(mAxisProgram, mAxisColorParam, "a_Color");
             glutil.checkGLError("binding axis attributes");
 
@@ -434,14 +513,24 @@ public class MainActivity extends GarActivity {
 
     @Override
     public void onNewFrame(HeadTransform headTransform) {
-        super.onNewFrame(headTransform);
-
         float[] forwardVec = new float[3];
         float[] upVec = new float[3];
         float[] rightVec = new float[3];
         headTransform.getForwardVector(forwardVec, 0);
         headTransform.getUpVector(upVec, 0);
         headTransform.getRightVector(rightVec, 0);
+
+        // pass in surface used for tracking processing
+        ArrayList<Surface> surfList = new ArrayList<Surface>();
+        surfList.add(mProcessingSurface);
+        try {
+            mStereoCam.updateStereoView(surfList, rightVec, upVec, forwardVec);
+        } catch(CameraAccessException cae) {
+            Log.e(TAG, "COULDN'T ACCESS CAMERA ON REFRESH");
+        }
+
+        // Build the camera matrix.
+        Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
         if (mUltraTracker.isNewMarkerAvailable()) {
             // calculate bone model matrix based on marker location
@@ -516,7 +605,7 @@ public class MainActivity extends GarActivity {
 
             // TODO get the coordinates together better to avoid unnecessary multiplications
             // multiply together, we want v' = TSRM^T v
-           // markerTransform = trans;
+            // markerTransform = trans;
             float[] basisChangeRot = new float[16];
             float[] addScale = new float[16];
             Matrix.multiplyMM(basisChangeRot, 0, rot, 0, mt, 0);
@@ -568,31 +657,45 @@ public class MainActivity extends GarActivity {
         glutil.checkGLError("onReadyToDraw");
     }
 
-    /**
-     * Draws the 3D scene to be laid over the current back-facing camera view.
-     * These are the augmented portions of the application. This will be called
-     * twice per frame, one for the left eye, and again for the right. Anything
-     * drawn with an alpha value of 0.0 will be treated as background and filtered
-     * from the final render to show the camera view in the background.
-     *
-     * @param view        The view matrix to use for eye being drawn.
-     * @param perspective The perspective matrix to use for the eye being drawn.
-     */
     @Override
-    protected void drawObjects(float[] view, float[] perspective) {
+    public void onDrawEye(Eye eye) {
+        GLES20.glEnable(GLES20.GL_DEPTH_TEST);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+
+        glutil.checkGLError("colorParam");
+
+        int[] test = new int[4];
+        eye.getViewport().getAsArray(test, 0);
+        Size newSize = mStereoCam.getCameraImageSize();
+        if (eye.getType() == 1) {
+            eye.getViewport().setViewport(0, 0, newSize.getWidth(), newSize.getHeight());
+        } else {
+            eye.getViewport().setViewport(newSize.getWidth(), 0, newSize.getWidth(), newSize.getHeight());
+        }
+        eye.getViewport().setGLViewport();
+        eye.getViewport().setGLScissor();
+        eye.getViewport().getAsArray(test, 0);
+
+        // Apply the eye transformation to the camera.
+        Matrix.multiplyMM(mView, 0, eye.getEyeView(), 0, mCamera, 0);
         // Set the position of the light
-        Matrix.multiplyMV(mLightPosInEyeSpace, 0, view, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
+        Matrix.multiplyMV(mLightPosInEyeSpace, 0, mView, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
+        // Get the perspective matrix for bone model
+        float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
 
         if (DRAW_BONE) {
-            Matrix.multiplyMM(mModelView, 0, view, 0, mModelBone, 0);
+            Matrix.multiplyMM(mModelView, 0, mView, 0, mModelBone, 0);
             Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
         }
         if (DRAW_AXES) {
             // set up matrices for axes
             float [] axisMV = new float [16];
-            Matrix.multiplyMM(axisMV, 0, view, 0, mModelAxis, 0);
+            Matrix.multiplyMM(axisMV, 0, mView, 0, mModelAxis, 0);
             Matrix.multiplyMM(mModelViewProjectionAxis, 0, perspective, 0, axisMV, 0);
         }
+
+        // draw the stereo camera
+        mStereoCam.drawStereoView(mView, perspective);
 
         if (ONLY_DRAW_WHEN_DETECTED) {
             // only draw if last frame processed produced a detected marker

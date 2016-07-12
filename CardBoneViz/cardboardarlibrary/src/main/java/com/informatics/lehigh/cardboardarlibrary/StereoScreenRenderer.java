@@ -35,12 +35,12 @@ public class StereoScreenRenderer implements GLRenderer {
     };
     /** Texture coordinates for the screen plane */
     private static final float[] SCREEN_TEX_COORDS = new float [] {
+            0.0f, 1.0f, 0.0f, 1.0f,
             0.0f, 0.0f, 0.0f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, 0.0f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f,
             1.0f, 1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, 0.0f, 1.0f
+            0.0f, 0.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, 0.0f, 1.0f,
+            1.0f, 1.0f, 0.0f, 1.0f
     };
 
     //
@@ -174,7 +174,7 @@ public class StereoScreenRenderer implements GLRenderer {
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenObjectsTextureID);
-        GLES20.glUniform1i(mScreenObjectsTextureParam, 0);
+        GLES20.glUniform1i(mScreenObjectsTextureParam, 1);
         glutil.checkGLError("binding objects texture");
 
         // Set the position of the screen
