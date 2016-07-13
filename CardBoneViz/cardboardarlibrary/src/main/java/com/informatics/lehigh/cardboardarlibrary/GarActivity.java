@@ -56,7 +56,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     // CONSTANTS
     //
     private static final float CAMERA_Z = 0.01f;
-    private static final float Z_NEAR = 0.1f;
+    private static final float Z_NEAR = 0.01f;
     private static final float Z_FAR = 100.0f;
     /** Need to bind to frame buffer ID 1 to render properly to google vr view for some reason */
     private static final int DEFAULT_FBO_ID = 1;
@@ -90,6 +90,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private int mProcessingReaderBufferSize = 5;
     /** physical field of view size (x, y)*/
     Point mFov;
+    /** Physical size of the camera sensor */
     SizeF mSensorSize;
 
     //

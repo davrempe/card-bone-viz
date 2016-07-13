@@ -11,7 +11,7 @@ import com.google.vr.sdk.base.Viewport;
 import javax.microedition.khronos.egl.EGLConfig;
 
 import com.informatics.lehigh.cardboardarlibrary.GarActivity;
-import com.informatics.lehigh.cardboardarlibrary.StereoCamera;
+import com.informatics.lehigh.cardboardarlibrary.StereoScreenRenderer;
 
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
@@ -31,14 +31,14 @@ public class MainActivity extends GarActivity {
 
     private static final int BYTES_PER_FLOAT = 4;
     private static final int BYTES_PER_SHORT = 2;
-    private static final float PADDING_SIZE = 0.003f;
-    private static final float MARKER_SIZE = 0.017f;
+    private static final float PADDING_SIZE = 0.005f;
+    private static final float MARKER_SIZE = 0.035f;
 
     //
     // PREFERENCES
     //
     /** Render the bone on detected marker */
-    private static final boolean DRAW_BONE = true;
+    private static final boolean DRAW_BONE = false;
     /** Render the axes on detected marker */
     private static final boolean DRAW_AXES = true;
     /** Only render models if the marker is currently detected */
@@ -49,9 +49,9 @@ public class MainActivity extends GarActivity {
     // CHANGE DRAW BONE SETTING HERE
     //
     /** The coefficient to scale the bone model down by when rendering */
-    private static final float SCALING_COEFF = 0.0005f;
+    private static final float SCALING_COEFF = 0.0005f; //0.0005f;
     /** Distance abover the marker for the bone to float */
-    private static final float BONE_HOVER_DIST = 0.04f;
+    private static final float BONE_HOVER_DIST = 0.04f;//0.04f;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */
@@ -70,8 +70,8 @@ public class MainActivity extends GarActivity {
     // CHANGE DRAW AXIS SETTING HERE
     //
     private static final int NUM_AXIS_VERTICES = 6;
-    private static final float AXIS_LENGTH = MARKER_SIZE + PADDING_SIZE;
-    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH;// + 0.01f;
+    private static final float AXIS_LENGTH = 2.0f*(MARKER_SIZE + 2.0f*PADDING_SIZE);
+    private static final float AXIS_DEPTH = StereoScreenRenderer.SCREEN_DEPTH;// + 0.01f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
             -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
@@ -565,6 +565,7 @@ public class MainActivity extends GarActivity {
             Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
         }
         if (DRAW_AXES) {
+            GLES20.glLineWidth(5.0f);
             // set up matrices for axes
             float [] axisMV = new float [16];
             Matrix.multiplyMM(axisMV, 0, view, 0, mModelAxis, 0);
