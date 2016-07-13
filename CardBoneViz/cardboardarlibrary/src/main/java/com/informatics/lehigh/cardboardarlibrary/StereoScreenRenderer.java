@@ -11,6 +11,7 @@ import com.google.vr.sdk.base.HeadTransform;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 
 public class StereoScreenRenderer implements GLRenderer {
 
@@ -158,6 +159,9 @@ public class StereoScreenRenderer implements GLRenderer {
      */
     @Override
     public void draw(float[] view, float[] perspective) {
+//        IntBuffer viewport = IntBuffer.allocate(4);
+//        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, viewport);
+
         // get modelview matrix
         float [] modelView = new float[16];
         Matrix.multiplyMM(modelView, 0, view, 0, mModelScreen, 0);

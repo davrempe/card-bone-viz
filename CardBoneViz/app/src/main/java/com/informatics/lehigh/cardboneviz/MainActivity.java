@@ -13,9 +13,6 @@ import javax.microedition.khronos.egl.EGLConfig;
 import com.informatics.lehigh.cardboardarlibrary.GarActivity;
 import com.informatics.lehigh.cardboardarlibrary.StereoCamera;
 
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 
@@ -74,7 +71,7 @@ public class MainActivity extends GarActivity {
     //
     private static final int NUM_AXIS_VERTICES = 6;
     private static final float AXIS_LENGTH = MARKER_SIZE + PADDING_SIZE;
-    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH + 0.01f;
+    private static final float AXIS_DEPTH = StereoCamera.SCREEN_DEPTH;// + 0.01f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
             -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
@@ -150,22 +147,6 @@ public class MainActivity extends GarActivity {
     /** The thread being used to run ultrasound tracking */
     private Thread mTrackingThread;
 
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-        @Override
-        public void onManagerConnected(int status) {
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS:
-                {
-                    Log.i("OpenCV", "OpenCV loaded successfully");
-                } break;
-                default:
-                {
-                    super.onManagerConnected(status);
-                } break;
-            }
-        }
-    };
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -194,13 +175,6 @@ public class MainActivity extends GarActivity {
     @Override
     public void onResume() {
         super.onResume();
-        if (!OpenCVLoader.initDebug()) {
-            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
-            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
-        } else {
-            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
-            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-        }
     }
 
     @Override
@@ -580,6 +554,9 @@ public class MainActivity extends GarActivity {
      */
     @Override
     protected void drawObjects(float[] view, float[] perspective) {
+//        IntBuffer viewport = IntBuffer.allocate(4);
+//        GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, viewport);
+
         // Set the position of the light
         Matrix.multiplyMV(mLightPosInEyeSpace, 0, view, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
 

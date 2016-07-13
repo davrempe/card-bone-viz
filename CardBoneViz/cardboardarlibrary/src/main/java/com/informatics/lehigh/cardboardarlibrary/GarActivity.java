@@ -17,24 +17,36 @@ import android.media.ImageReader;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.util.Log;
 import android.util.Size;
+import android.util.SizeF;
 import android.view.Surface;
 
 import com.google.vr.sdk.base.Eye;
+import com.google.vr.sdk.base.FieldOfView;
 import com.google.vr.sdk.base.GvrActivity;
 import com.google.vr.sdk.base.GvrView;
 import com.google.vr.sdk.base.HeadTransform;
 import com.google.vr.sdk.base.Viewport;
+
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import es.ava.aruco.CameraParameters;
 
 public abstract class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
 
@@ -76,6 +88,9 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private Surface mProcessingSurface;
     /** Number of images that the processing reader is able to hold simultaneously */
     private int mProcessingReaderBufferSize = 5;
+    /** physical field of view size (x, y)*/
+    Point mFov;
+    SizeF mSensorSize;
 
     //
     // OpenGL-related members
@@ -100,6 +115,22 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     //
     CameraTextureRenderer camTexRenderer;
     StereoScreenRenderer screenRenderer;
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    Log.i("OpenCV", "OpenCV loaded successfully");
+                } break;
+                default:
+                {
+                    super.onManagerConnected(status);
+                } break;
+            }
+        }
+    };
 
 
     @Override
@@ -167,6 +198,9 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
             if (mPreviewSize.getHeight() == -1) {
                 throw new RuntimeException("Camera does not have a 16:9 resolution!");
             }
+
+            // store camera characteristics for rendering purposes
+            mSensorSize = camChars.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
 
         } catch (CameraAccessException cae) {
             Log.e(TAG, "COULD NOT ACCESS CAMERA");
@@ -329,6 +363,14 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     @Override
     protected void onResume() {
         super.onResume();
+
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_11, this, mLoaderCallback);
+        } else {
+            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
     }
 
     @Override
@@ -432,6 +474,21 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
         glutil.checkGLError("initRenderers");
 
+        // get instrinsic camera parameters from saved calibration
+        CameraParameters camParams = new CameraParameters();
+        String externalDir = Environment.getExternalStorageDirectory().toString();
+        camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
+        Mat camMat = camParams.getCameraMatrix();
+
+        double[] fovx = new double[1];
+        double[] fovy = new double[1];
+        double[] focalLength = new double[1];
+        double[] aspectRatio = new double[1];
+        Calib3d.calibrationMatrixValues(camMat, new org.opencv.core.Size(mPreviewSize.getWidth(), mPreviewSize.getHeight()),
+                mSensorSize.getWidth(), mSensorSize.getHeight(), fovx, fovy, focalLength, new Point(), aspectRatio);
+
+        mFov = new Point(fovx[0], fovy[0]);
+
     }
 
     @Override
@@ -469,8 +526,10 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
     @Override
     public void onDrawEye(Eye eye) {
-        Viewport initViewport = eye.getViewport();
-        // TODO
+        Viewport curView = eye.getViewport();
+        Viewport initViewport = new Viewport();
+        initViewport.setViewport(curView.x, curView.y, curView.width, curView.height);
+        // TODO it's combining the left and right eye textures for some reason
 
         // Change to camera resolution for scene render
         eye.getViewport().setViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -482,14 +541,23 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         float[] viewMat = new float[16];
         Matrix.multiplyMM(viewMat, 0, eye.getEyeView(), 0, mCamera, 0);
         // Get the perspective matrix for 3D objects rendering
-        float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
+        // Create FOV identical to physical
+        float[] perspective = new float[16]; //eye.getPerspective(Z_NEAR, Z_FAR);
+        Matrix.perspectiveM(perspective, 0, (float)mFov.y, (float)mPreviewSize.getWidth() / (float)mPreviewSize.getHeight(), Z_NEAR, Z_FAR);
+//        FieldOfView physFov = new FieldOfView((float)mFov.x, (float)mFov.x, (float)mFov.y, (float)mFov.y);
+//        physFov.toPerspectiveMatrix(Z_NEAR, Z_FAR, perspective, 0);
 
         // First draw object scene texture through frame buffer
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFboIdObjects);
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        if (eye.getType() == Eye.Type.LEFT) {
+            GLES20.glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+        } else {
+            GLES20.glClearColor(0.0f, 0.0f, 1.0f, 0.0f);
+        }
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
-        GLES20.glViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        //GLES20.glViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        //GLES20.glViewport(0, 0, 100, 100);
 
         drawObjects(viewMat, perspective);
 
@@ -501,7 +569,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         eye.getViewport().setGLScissor();
         eye.setProjectionChanged();
 
-        // Recalculate the perspective matrix
+        // Recalculate the perspective matrix for vr view
         perspective = eye.getPerspective(Z_NEAR, Z_FAR);
 
         // Now draw actual screen for cardboard viewer
