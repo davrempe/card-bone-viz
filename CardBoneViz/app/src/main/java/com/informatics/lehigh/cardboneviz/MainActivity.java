@@ -71,7 +71,7 @@ public class MainActivity extends GarActivity {
     //
     private static final int NUM_AXIS_VERTICES = 6;
     private static final float AXIS_LENGTH = (MARKER_SIZE + 2.0f*PADDING_SIZE);
-    private static final float AXIS_DEPTH = -90.0f; //StereoScreenRenderer.SCREEN_DEPTH;// + 0.01f;
+    private static final float AXIS_DEPTH = StereoScreenRenderer.SCREEN_DEPTH;// + 0.01f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
             -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
@@ -142,6 +142,10 @@ public class MainActivity extends GarActivity {
     //
     // MISC
     //
+    /** Renderer used for the bone models */
+    BoneRenderer boneRenderer;
+    /** Renderer used for the marker cube axes */
+    AxisRenderer axisRenderer;
     /** Image processor to track ultrasound wand location */
     private UltrasoundTracker mUltraTracker;
     /** The thread being used to run ultrasound tracking */
@@ -151,19 +155,11 @@ public class MainActivity extends GarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        mModelView = new float[16];
-        mModelViewProjection = new float[16];
-
         if (DRAW_BONE) {
-            mModelBone = new float[16];
-            mBoneNorm = new float[16];
-            Matrix.setIdentityM(mModelBone, 0);
-            Matrix.setIdentityM(mBoneNorm, 0);
+            boneRenderer = new BoneRenderer(this);
         }
         if (DRAW_AXES) {
-            mModelAxis = new float[16];
-            mModelViewProjectionAxis = new float[16];
-            Matrix.setIdentityM(mModelAxis, 0);
+            axisRenderer = new AxisRenderer(this);
         }
 
         // initialize ultrasound wand tracker
@@ -201,209 +197,11 @@ public class MainActivity extends GarActivity {
         Log.i(TAG, "onSurfaceCreated");
 
         if (DRAW_BONE) {
-            // Parse the SURF data file to get bone vertex, normal, and index data
-            SurfParser surfParse = new SurfParser(getResources().openRawResource(SURF_DATA));
-            surfParse.parse();
-            mNumBoneVerts = surfParse.getNumVerts();
-            mNumBoneTris = surfParse.getNumTris();
-            float[] boneVertices = surfParse.getVertices();
-            float[] boneCentroid = surfParse.getCentroid();
-            float[] boneNormals = surfParse.getNormals();
-            short[] boneIndices = surfParse.getIndices();
-
-            Log.d("NUM VERTS", String.valueOf(surfParse.getNumVerts()));
-            Log.d("NUM TRIS", String.valueOf(surfParse.getNumTris()));
-            Log.d("CENTROID", "(" + String.valueOf(boneCentroid[0]) + ", " + String.valueOf(boneCentroid[1]) + ", " + String.valueOf(boneCentroid[2]) + ")");
-            Log.d("VERTS1", "(" + String.valueOf(boneVertices[0]) + ", " + String.valueOf(boneVertices[1]) + ", " + String.valueOf(boneVertices[2]) + ")");
-            Log.d("NORMS1", "(" + String.valueOf(boneNormals[0]) + ", " + String.valueOf(boneNormals[1]) + ", " + String.valueOf(boneNormals[2]) + ")");
-            Log.d("INDICES1", "(" + String.valueOf(boneIndices[0]) + ", " + String.valueOf(boneIndices[1]) + ", " + String.valueOf(boneIndices[2]) + ")");
-            Log.d("VERTS_LAST", "(" + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3 + 1]) + ", " + String.valueOf(boneVertices[(surfParse.getNumVerts() - 1) * 3 + 2]) + ")");
-            Log.d("NORMS_LAST", "(" + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3 + 1]) + ", " + String.valueOf(boneNormals[(surfParse.getNumVerts() - 1) * 3 + 2]) + ")");
-            Log.d("INDICES_LAST", "(" + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3 + 1]) + ", " + String.valueOf(boneIndices[(surfParse.getNumTris() - 1) * 3 + 2]) + ")");
-
-            //
-            // Aggregate bone data
-            //
-            // A vertex object is structured as {vec4 position, vec4 color, vec3 normal}
-            //
-            int dataSize = mNumBoneVerts * ELEMENTS_PER_BONE_VERTEX;
-            float[] boneData = new float[dataSize];
-            for (int i = 0; i < mNumBoneVerts; i++) {
-                boneData[i * ELEMENTS_PER_BONE_VERTEX] = boneVertices[i * ELEMENTS_PER_POINT];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 1] = boneVertices[i * ELEMENTS_PER_POINT + 1];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 2] = boneVertices[i * ELEMENTS_PER_POINT + 2];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 3] = 1.0f;
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 4] = BONE_COLOR[0];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 5] = BONE_COLOR[1];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 6] = BONE_COLOR[2];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 7] = BONE_COLOR[3];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 8] = boneNormals[i * ELEMENTS_PER_NORMAL];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 9] = boneNormals[i * ELEMENTS_PER_NORMAL + 1];
-                boneData[i * ELEMENTS_PER_BONE_VERTEX + 10] = boneNormals[i * ELEMENTS_PER_NORMAL + 2];
-            }
-
-            //
-            // Initialize GL elements for bone model
-            //
-
-            // make buffer for bone vertices
-            ByteBuffer bbBoneData = ByteBuffer.allocateDirect(boneData.length * BYTES_PER_FLOAT);
-            bbBoneData.order(ByteOrder.nativeOrder());
-            FloatBuffer boneDataFloatBuf = bbBoneData.asFloatBuffer();
-            boneDataFloatBuf.put(boneData);
-            boneDataFloatBuf.position(0);
-
-            // make buffer for bone indices
-            ByteBuffer bbBoneIndices = ByteBuffer.allocateDirect(boneIndices.length * BYTES_PER_SHORT);
-            bbBoneIndices.order(ByteOrder.nativeOrder());
-            ShortBuffer boneIndexShortBuffer = bbBoneIndices.asShortBuffer();
-            boneIndexShortBuffer.put(boneIndices);
-            boneIndexShortBuffer.position(0);
-
-            // init gl buffers
-            int[] buffers = new int[2];
-            GLES20.glGenBuffers(2, buffers, 0);
-            mBoneVertBuf = buffers[0];
-            mBoneIndexBuf = buffers[1];
-
-            // bind vertex buffer
-            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mBoneVertBuf);
-            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, boneDataFloatBuf.capacity() * BYTES_PER_FLOAT,
-                    boneDataFloatBuf, GLES20.GL_STATIC_DRAW);
-
-            // bind index buffer
-            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, mBoneIndexBuf);
-            GLES20.glBufferData(GLES20.GL_ELEMENT_ARRAY_BUFFER, boneIndexShortBuffer.capacity() * BYTES_PER_SHORT,
-                    boneIndexShortBuffer, GLES20.GL_STATIC_DRAW);
-
-            // free buffers
-            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-            GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
-
-            glutil.checkGLError("bindingBuffers");
-
-            // create and link shaders
-            int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.bone_vert);
-            int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.bone_frag);
-
-            mBoneProgram = GLES20.glCreateProgram();
-            GLES20.glAttachShader(mBoneProgram, vertexShader);
-            GLES20.glAttachShader(mBoneProgram, fragmentShader);
-
-            // MUST BIND BEFORE LINKING SHADERS
-            mBonePositionParam = 0;
-            GLES20.glBindAttribLocation(mBoneProgram, mBonePositionParam, "a_Position");
-            mBoneNormalParam = 1;
-            GLES20.glBindAttribLocation(mBoneProgram, mBoneNormalParam, "a_Normal");
-            mBoneColorParam = 2;
-            GLES20.glBindAttribLocation(mBoneProgram, mBoneColorParam, "a_Color");
-            glutil.checkGLError("binding attributes");
-
-            GLES20.glLinkProgram(mBoneProgram);
-            GLES20.glUseProgram(mBoneProgram);
-            glutil.checkGLError("Link program");
-
-            mBoneModelViewParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVMatrix");
-            mBoneModelViewProjectionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVP");
-            mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
-            glutil.checkGLError("binding uniforms");
-
-            //
-            // Initialize bone model normalization matrix
-            // We want to first translate by the negative centroid to move close to (0, 0, 0),
-            // then scale from _____? (original scale in SURF file) to m.
-            //
-            float transCent[] = new float[16];
-            Matrix.setIdentityM(transCent, 0);
-            Matrix.translateM(transCent, 0, -boneCentroid[0], -boneCentroid[1], -boneCentroid[2]);
-            float scaleMat[] = new float[16];
-            Matrix.setIdentityM(scaleMat, 0);
-            Matrix.scaleM(scaleMat, 0, SCALING_COEFF, SCALING_COEFF, SCALING_COEFF);
-
-            Matrix.multiplyMM(mBoneNorm, 0, scaleMat, 0, transCent, 0);
+            boneRenderer.init();
         }
-        //
-        // Now for the axis data
-        //
         if (DRAW_AXES) {
-            // Aggregate axis data
-            // Vertex object is of the form {vec4 position, vec4 color}
-            int dataSize = NUM_AXIS_VERTICES * ELEMENTS_PER_AXIS_VERTEX;
-            float[] axisData = new float[dataSize];
-            for (int i = 0; i < NUM_AXIS_VERTICES; i++) {
-                float [] curPos = {AXIS_VERTICES[i*ELEMENTS_PER_POSITION],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 1],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 2],
-                                    AXIS_VERTICES[i*ELEMENTS_PER_POSITION + 3]};
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX] = curPos[0];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 1] = curPos[1];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 2] = curPos[2];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 3] = curPos[3];
-                float [] axisColor = new float[4];
-                if (i < 2) {
-                    axisColor[0] = 1.0f;
-                    axisColor[1] = 0.0f;
-                    axisColor[2] = 0.0f;
-                } else if (i < 4) {
-                    axisColor[0] = 0.0f;
-                    axisColor[1] = 1.0f;
-                    axisColor[2] = 0.0f;
-                } else {
-                    axisColor[0] = 0.0f;
-                    axisColor[1] = 0.0f;
-                    axisColor[2] = 1.0f;
-                }
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 4] = axisColor[0];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 5] = axisColor[1];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 6] = axisColor[2];
-                axisData[i * ELEMENTS_PER_AXIS_VERTEX + 7] = 1.0f;
-            }
-
-            // make buffer for axis data
-            ByteBuffer bbAxisData = ByteBuffer.allocateDirect(axisData.length * BYTES_PER_FLOAT);
-            bbAxisData.order(ByteOrder.nativeOrder());
-            FloatBuffer axisDataFloatBuf = bbAxisData.asFloatBuffer();
-            axisDataFloatBuf.put(axisData);
-            axisDataFloatBuf.position(0);
-
-            // init gl buffers
-            int [] axisBuffs = new int[1];
-            GLES20.glGenBuffers(1, axisBuffs, 0);
-            mAxisVertBuf = axisBuffs[0];
-
-            // bind vertex buffer
-            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mAxisVertBuf);
-            GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, axisDataFloatBuf.capacity()*BYTES_PER_FLOAT,
-                    axisDataFloatBuf, GLES20.GL_STATIC_DRAW);
-
-            // free buffer
-            GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
-
-            glutil.checkGLError("bindingAxisBuffers");
-
-            // create and link shaders
-            int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
-            int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
-
-            mAxisProgram = GLES20.glCreateProgram();
-            GLES20.glAttachShader(mAxisProgram, vertexShader);
-            GLES20.glAttachShader(mAxisProgram, fragmentShader);
-
-            // MUST BIND BEFORE LINKING SHADERS
-            mAxisPositionParam = 0;
-            GLES20.glBindAttribLocation(mAxisProgram, mAxisPositionParam, "a_Position");
-            mAxisColorParam = 1;
-            GLES20.glBindAttribLocation(mAxisProgram, mAxisColorParam, "a_Color");
-            glutil.checkGLError("binding axis attributes");
-
-            GLES20.glLinkProgram(mAxisProgram);
-            GLES20.glUseProgram(mAxisProgram);
-            glutil.checkGLError("Link axis program");
-
-            mAxisModelViewProjectionParam = GLES20.glGetUniformLocation(mAxisProgram, "u_MVP");
-            glutil.checkGLError("binding uniforms");
+            axisRenderer.init();
         }
-
     }
 
     @Override
@@ -500,6 +298,8 @@ public class MainActivity extends GarActivity {
             float centerCubeTransform[] = new float [16];
             Matrix.setIdentityM(centerCubeTransform, 0);
             Matrix.multiplyMM(centerCubeTransform, 0, trans, 0, addScale, 0);
+
+            // TODO pass center cube transform to renderers
 
             // want to translate axis so sitting on top marker
             // because location is in center of marker cube
