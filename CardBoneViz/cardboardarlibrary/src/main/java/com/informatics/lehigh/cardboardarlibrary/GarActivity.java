@@ -530,10 +530,14 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         Viewport curView = eye.getViewport();
         Viewport initViewport = new Viewport();
         initViewport.setViewport(curView.x, curView.y, curView.width, curView.height);
-        // TODO it's combining the left and right eye textures for some reason
+
+        FieldOfView curFov = eye.getFov();
+        FieldOfView initFov = new FieldOfView(curFov.getLeft(), curFov.getRight(), curFov.getBottom(), curFov.getTop());
 
         // Change to camera resolution for scene render
         eye.getViewport().setViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        float calib = 0.6f;
+        eye.getFov().setAngles((float)mFov.x*calib / 2.0f, (float)mFov.x*calib / 2.0f, (float)mFov.y*calib / 2.0f, (float)mFov.y*calib / 2.0f);
         eye.getViewport().setGLViewport();
         eye.getViewport().setGLScissor();
         eye.setProjectionChanged();
@@ -543,8 +547,9 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         Matrix.multiplyMM(viewMat, 0, eye.getEyeView(), 0, mCamera, 0);
         // Get the perspective matrix for 3D objects rendering
         // Create FOV identical to physical
-        float[] perspective = new float[16]; //eye.getPerspective(Z_NEAR, Z_FAR);
-        Matrix.perspectiveM(perspective, 0, (float)mFov.y, (float)mPreviewSize.getWidth() / (float)mPreviewSize.getHeight(), Z_NEAR, Z_FAR);
+        float[] perspective = new float[16];
+        perspective = eye.getPerspective(Z_NEAR, Z_FAR);
+        //Matrix.perspectiveM(perspective, 0, (float)mFov.y, (float)mPreviewSize.getWidth() / (float)mPreviewSize.getHeight(), Z_NEAR, Z_FAR);
 //        FieldOfView physFov = new FieldOfView((float)mFov.x, (float)mFov.x, (float)mFov.y, (float)mFov.y);
 //        physFov.toPerspectiveMatrix(Z_NEAR, Z_FAR, perspective, 0);
 
@@ -566,12 +571,14 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
         // Change back to initial res
         eye.getViewport().setViewport(initViewport.x, initViewport.y, initViewport.width, initViewport.height);
+        eye.getFov().setAngles(initFov.getLeft(), initFov.getRight(), initFov.getBottom(), initFov.getTop());
         eye.getViewport().setGLViewport();
         eye.getViewport().setGLScissor();
         eye.setProjectionChanged();
 
         // Recalculate the perspective matrix for vr view
         perspective = eye.getPerspective(Z_NEAR, Z_FAR);
+       // Matrix.perspectiveM(perspective, 0, eye.getFov().getTop(), (float)eye.getViewport().width / (float)eye.getViewport().height, Z_NEAR, Z_FAR);
 
         // Now draw actual screen for cardboard viewer
         // TODO did the eye viewport get changed by changing above?

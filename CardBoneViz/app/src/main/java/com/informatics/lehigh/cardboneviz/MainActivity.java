@@ -70,8 +70,8 @@ public class MainActivity extends GarActivity {
     // CHANGE DRAW AXIS SETTING HERE
     //
     private static final int NUM_AXIS_VERTICES = 6;
-    private static final float AXIS_LENGTH = 2.0f*(MARKER_SIZE + 2.0f*PADDING_SIZE);
-    private static final float AXIS_DEPTH = StereoScreenRenderer.SCREEN_DEPTH;// + 0.01f;
+    private static final float AXIS_LENGTH = (MARKER_SIZE + 2.0f*PADDING_SIZE);
+    private static final float AXIS_DEPTH = -90.0f; //StereoScreenRenderer.SCREEN_DEPTH;// + 0.01f;
     // places axis in top left corner of marker
     private static final float[] AXIS_VERTICES = new float[] {
             -AXIS_LENGTH / 2.0f, AXIS_LENGTH / 2.0f, 0.0f, 1.0f, // x axis
@@ -461,6 +461,7 @@ public class MainActivity extends GarActivity {
             tvecCam[2] = -(float) tvecMat.get(2, 0)[0];
             tvecCam[3] = 1.0f;
 
+            // TODO
             // adjust z so not too close to camera
             // update x and y accordingly
             // must move away in cardboard -z as well as properly scale so this translation isn't noticed
@@ -468,10 +469,10 @@ public class MainActivity extends GarActivity {
             float yRatio = tvecCam[1] / Math.abs(tvecCam[2]);
             float scaleRatio = 1.0f / Math.abs(tvecCam[2]);
             float distToMoveZ = Math.abs(Math.abs(tvecCam[2]) - Math.abs(AXIS_DEPTH));
-            float adjustX = distToMoveZ * xRatio;
-            float adjustY = distToMoveZ * yRatio;
-            float scaleFact = distToMoveZ * scaleRatio;
             float adjustZ = (AXIS_DEPTH <= tvecCam[2] ? -distToMoveZ : distToMoveZ); // actually moves to the initial Z position
+            float scaleFact = 1.0f - adjustZ * scaleRatio;
+            float adjustX = -adjustZ * xRatio;
+            float adjustY = -adjustZ * yRatio;
             tvecCam[0] += adjustX;
             tvecCam[1] += adjustY;
             tvecCam[2] += adjustZ;
