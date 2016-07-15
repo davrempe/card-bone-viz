@@ -8,7 +8,7 @@ import android.util.Log;
 import com.google.vr.sdk.base.GvrView;
 import com.google.vr.sdk.base.HeadTransform;
 import com.informatics.lehigh.cardboardarlibrary.GLRenderer;
-import com.informatics.lehigh.cardboardarlibrary.GLUtil;
+import com.informatics.lehigh.cardboardarlibrary.GarUtil;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -29,8 +29,8 @@ public class BoneRenderer implements GLRenderer {
     //
     /** The coefficient to scale the bone model down by when rendering */
     private static final float SCALING_COEFF = 0.0005f; //0.0005f;
-    /** Distance abover the marker for the bone to float */
-    private static final float BONE_HOVER_DIST = 0.04f;//0.04f;
+    /** Distance above the center of the cube marker for the bone to hover */
+    private static final float BONE_HOVER_DIST = 0.1f;//0.04f;
     /** Elements in vertices returned from SURF file */
     private static final int ELEMENTS_PER_POINT = 3;
     /** Elements in position data passed to shaders */
@@ -81,8 +81,8 @@ public class BoneRenderer implements GLRenderer {
     private int mBoneModelViewProjectionParam;
     /** Attribute location for light position */
     private int mBoneLightPositionParam;
-    /** GLUtil instance */
-    private GLUtil glutil;
+    /** GarUtil instance */
+    private GarUtil garutil;
 
     /** The calling activity */
     private Activity callingActivity;
@@ -99,7 +99,7 @@ public class BoneRenderer implements GLRenderer {
         Matrix.setIdentityM(mModelBone, 0);
         Matrix.setIdentityM(mBoneNorm, 0);
 
-        glutil = new GLUtil(activity.getResources());
+        garutil = new GarUtil(activity.getResources());
     }
 
     /**
@@ -188,11 +188,11 @@ public class BoneRenderer implements GLRenderer {
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
         GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
 
-        glutil.checkGLError("bindingBuffers");
+        garutil.checkGLError("bindingBuffers");
 
         // create and link shaders
-        int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.bone_vert);
-        int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.bone_frag);
+        int vertexShader = garutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.bone_vert);
+        int fragmentShader = garutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.bone_frag);
 
         mBoneProgram = GLES20.glCreateProgram();
         GLES20.glAttachShader(mBoneProgram, vertexShader);
@@ -205,16 +205,16 @@ public class BoneRenderer implements GLRenderer {
         GLES20.glBindAttribLocation(mBoneProgram, mBoneNormalParam, "a_Normal");
         mBoneColorParam = 2;
         GLES20.glBindAttribLocation(mBoneProgram, mBoneColorParam, "a_Color");
-        glutil.checkGLError("binding attributes");
+        garutil.checkGLError("binding attributes");
 
         GLES20.glLinkProgram(mBoneProgram);
         GLES20.glUseProgram(mBoneProgram);
-        glutil.checkGLError("Link program");
+        garutil.checkGLError("Link program");
 
         mBoneModelViewParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVMatrix");
         mBoneModelViewProjectionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_MVP");
         mBoneLightPositionParam = GLES20.glGetUniformLocation(mBoneProgram, "u_LightPos");
-        glutil.checkGLError("binding uniforms");
+        garutil.checkGLError("binding uniforms");
 
         //
         // Initialize bone model normalization matrix
@@ -242,14 +242,33 @@ public class BoneRenderer implements GLRenderer {
      */
     @Override
     public void update(HeadTransform headTransform) {
-        float[] forwardVec = new float[3];
-        float[] upVec = new float[3];
-        float[] rightVec = new float[3];
-        headTransform.getForwardVector(forwardVec, 0);
-        headTransform.getUpVector(upVec, 0);
-        headTransform.getRightVector(rightVec, 0);
+        // Find point of origin
+        float[] origin = new float[] {0.0f, 0.0f, 0.0f, 1.0f};
+        float[] originVec = new float[4];
+        Matrix.multiplyMV(originVec, 0, mCenterCubeTransform, 0, origin, 0);
 
+        // want to translate bone so floating above marker
+        float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, BONE_HOVER_DIST, 1.0f};
+        // apply full transformation
+        float[] transBoneVec = new float[4];
+        Matrix.multiplyMV(transBoneVec, 0, mCenterCubeTransform, 0, aboveSurfaceVec, 0);
 
+        // Subtract to get vector from center of cube to bone center
+        float[] translateVec = new float[] {transBoneVec[0] - originVec[0],
+                                            transBoneVec[1] - originVec[1],
+                                            transBoneVec[2] - originVec[2]};
+
+        // Build translation matrix
+        float transBone[] = new float[16];
+        Matrix.setIdentityM(transBone, 0);
+        Matrix.translateM(transBone, 0, translateVec[0], translateVec[1], translateVec[2]);
+
+        float boneTransform[] = new float [16];
+        Matrix.setIdentityM(boneTransform, 0);
+        Matrix.multiplyMM(boneTransform, 0, transBone, 0, mCenterCubeTransform, 0);
+
+        // include the normalization transform and update model matrix
+        Matrix.multiplyMM(mModelBone, 0, boneTransform, 0, mBoneNorm, 0);
     }
 
     /**
@@ -261,8 +280,56 @@ public class BoneRenderer implements GLRenderer {
      */
     @Override
     public void draw(float[] view, float[] perspective) {
+        // Set the position of the light
+        Matrix.multiplyMV(mLightPosInEyeSpace, 0, view, 0, LIGHT_POS_IN_WORLD_SPACE, 0);
 
+        Matrix.multiplyMM(mModelView, 0, view, 0, mModelBone, 0);
+        Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, mModelView, 0);
+
+        // now actually draw the bone model
+        GLES20.glUseProgram(mBoneProgram);
+
+        // Point to uniform variables
+        GLES20.glUniform3fv(mBoneLightPositionParam, 1, mLightPosInEyeSpace, 0);
+        // Set the ModelView in the shader, used to calculate lighting
+        GLES20.glUniformMatrix4fv(mBoneModelViewParam, 1, false, mModelView, 0);
+        // Set the ModelViewProjection matrix in the shader.
+        GLES20.glUniformMatrix4fv(mBoneModelViewProjectionParam, 1, false, mModelViewProjection, 0);
+
+        // bind attributes
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mBoneVertBuf);
+        // position
+        GLES20.glVertexAttribPointer(mBonePositionParam, ELEMENTS_PER_POSITION, GLES20.GL_FLOAT, false,
+                BONE_STRIDE, 0);
+        GLES20.glEnableVertexAttribArray(mBonePositionParam);
+        // colors
+        GLES20.glVertexAttribPointer(mBoneColorParam, ELEMENTS_PER_COLOR, GLES20.GL_FLOAT, false,
+                BONE_STRIDE, ELEMENTS_PER_POSITION * BYTES_PER_FLOAT);
+        GLES20.glEnableVertexAttribArray(mBoneColorParam);
+        // normals
+        GLES20.glVertexAttribPointer(mBoneNormalParam, ELEMENTS_PER_NORMAL, GLES20.GL_FLOAT, false,
+                BONE_STRIDE, (ELEMENTS_PER_POSITION + ELEMENTS_PER_COLOR) * BYTES_PER_FLOAT);
+        GLES20.glEnableVertexAttribArray(mBoneNormalParam);
+
+        // indices
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, mBoneIndexBuf);
+        // draw
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, 3 * mNumBoneTris, GLES20.GL_UNSIGNED_SHORT, 0);
+
+        // free buffers
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+        GLES20.glBindBuffer(GLES20.GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        garutil.checkGLError("Drawing bone");
     }
 
+    /**
+     * Sets the matrix that transforms from cube tracker coordinates to the
+     * world space. This will be used to render the bone on top of the cube marker.
+     * @param transform The 4x4 transformation matrix.
+     */
+    public void setCenterCubeTransform(float[] transform) {
+        mCenterCubeTransform = transform;
+    }
 
 }

@@ -7,7 +7,7 @@ import android.opengl.Matrix;
 import com.google.vr.sdk.base.GvrView;
 import com.google.vr.sdk.base.HeadTransform;
 import com.informatics.lehigh.cardboardarlibrary.GLRenderer;
-import com.informatics.lehigh.cardboardarlibrary.GLUtil;
+import com.informatics.lehigh.cardboardarlibrary.GarUtil;
 import com.informatics.lehigh.cardboardarlibrary.StereoScreenRenderer;
 
 import java.nio.ByteBuffer;
@@ -19,7 +19,6 @@ public class AxisRenderer implements GLRenderer {
     private static final String TAG = "AxisRenderer";
 
     private static final int BYTES_PER_FLOAT = 4;
-    private static final int BYTES_PER_SHORT = 2;
     private static final float PADDING_SIZE = 0.005f;
     private static final float MARKER_SIZE = 0.035f;
 
@@ -64,15 +63,15 @@ public class AxisRenderer implements GLRenderer {
     private int mAxisColorParam;
     /** Attribute location for axis ModelViewProjection matrix */
     private int mAxisModelViewProjectionParam;
-    /** GLUtil instance */
-    private GLUtil glutil;
+    /** GarUtil instance */
+    private GarUtil garutil;
 
     public AxisRenderer(Activity activity) {
         mModelAxis = new float[16];
         mModelViewProjectionAxis = new float[16];
         Matrix.setIdentityM(mModelAxis, 0);
 
-        glutil = new GLUtil(activity.getResources());
+        garutil = new GarUtil(activity.getResources());
     }
 
 
@@ -136,11 +135,11 @@ public class AxisRenderer implements GLRenderer {
         // free buffer
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
 
-        glutil.checkGLError("bindingAxisBuffers");
+        garutil.checkGLError("bindingAxisBuffers");
 
         // create and link shaders
-        int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
-        int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
+        int vertexShader = garutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.axis_vert);
+        int fragmentShader = garutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.axis_frag);
 
         mAxisProgram = GLES20.glCreateProgram();
         GLES20.glAttachShader(mAxisProgram, vertexShader);
@@ -151,14 +150,14 @@ public class AxisRenderer implements GLRenderer {
         GLES20.glBindAttribLocation(mAxisProgram, mAxisPositionParam, "a_Position");
         mAxisColorParam = 1;
         GLES20.glBindAttribLocation(mAxisProgram, mAxisColorParam, "a_Color");
-        glutil.checkGLError("binding axis attributes");
+        garutil.checkGLError("binding axis attributes");
 
         GLES20.glLinkProgram(mAxisProgram);
         GLES20.glUseProgram(mAxisProgram);
-        glutil.checkGLError("Link axis program");
+        garutil.checkGLError("Link axis program");
 
         mAxisModelViewProjectionParam = GLES20.glGetUniformLocation(mAxisProgram, "u_MVP");
-        glutil.checkGLError("binding uniforms");
+        garutil.checkGLError("binding uniforms");
     }
 
     /**
@@ -172,14 +171,34 @@ public class AxisRenderer implements GLRenderer {
      */
     @Override
     public void update(HeadTransform headTransform) {
-        float[] forwardVec = new float[3];
-        float[] upVec = new float[3];
-        float[] rightVec = new float[3];
-        headTransform.getForwardVector(forwardVec, 0);
-        headTransform.getUpVector(upVec, 0);
-        headTransform.getRightVector(rightVec, 0);
+        // Find point of origin
+        float[] origin = new float[] {0.0f, 0.0f, 0.0f, 1.0f};
+        float[] originVec = new float[4];
+        Matrix.multiplyMV(originVec, 0, mCenterCubeTransform, 0, origin, 0);
+        // want to translate axis so sitting on top marker
+        // because location is in center of marker cube
+        // find vector to top marker surface
+        float[] aboveSurfaceVec = new float[] {0.0f, 0.0f, (AXIS_LENGTH / 2.0f) + PADDING_SIZE, 1.0f};
+        // apply full transformation
+        float[] transAxesVec = new float[4];
+        Matrix.multiplyMV(transAxesVec, 0, mCenterCubeTransform, 0, aboveSurfaceVec, 0);
 
+        // Subtract to get vector from center of cube to top surface
+        float[] translateVec = new float[] {transAxesVec[0] - originVec[0],
+                                            transAxesVec[1] - originVec[1],
+                                            transAxesVec[2] - originVec[2]};
 
+        // Build additional translation matrix
+        float transAxes[] = new float[16];
+        Matrix.setIdentityM(transAxes, 0);
+        Matrix.translateM(transAxes, 0, translateVec[0], translateVec[1], translateVec[2]);
+
+        float axisTransform[] = new float [16];
+        Matrix.setIdentityM(axisTransform, 0);
+        Matrix.multiplyMM(axisTransform, 0, transAxes, 0, mCenterCubeTransform, 0);
+
+        // update model matrix
+        mModelAxis = axisTransform;
     }
 
     /**
@@ -191,6 +210,44 @@ public class AxisRenderer implements GLRenderer {
      */
     @Override
     public void draw(float[] view, float[] perspective) {
+        GLES20.glLineWidth(5.0f);
+        // set up matrices for axes
+        float [] axisMV = new float [16];
+        Matrix.multiplyMM(axisMV, 0, view, 0, mModelAxis, 0);
+        Matrix.multiplyMM(mModelViewProjectionAxis, 0, perspective, 0, axisMV, 0);
 
+        // now actually draw
+        GLES20.glUseProgram(mAxisProgram);
+
+        // Set the ModelViewProjection matrix in the shader.
+        GLES20.glUniformMatrix4fv(mAxisModelViewProjectionParam, 1, false, mModelViewProjectionAxis, 0);
+
+        // bind attributes
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, mAxisVertBuf);
+        // position
+        GLES20.glVertexAttribPointer(mAxisPositionParam, ELEMENTS_PER_POSITION, GLES20.GL_FLOAT, false,
+                AXIS_STRIDE, 0);
+        GLES20.glEnableVertexAttribArray(mAxisPositionParam);
+        // colors
+        GLES20.glVertexAttribPointer(mAxisColorParam, ELEMENTS_PER_COLOR, GLES20.GL_FLOAT, false,
+                AXIS_STRIDE, ELEMENTS_PER_POSITION * BYTES_PER_FLOAT);
+        GLES20.glEnableVertexAttribArray(mAxisColorParam);
+
+        // draw
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, NUM_AXIS_VERTICES);
+
+        // free buffer
+        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0);
+
+        garutil.checkGLError("Drawing axes");
+    }
+
+    /**
+     * Sets the matrix that transforms from cube tracker coordinates to the
+     * world space. This will be used to render the axes on top of the cube marker.
+     * @param transform The 4x4 transformation matrix.
+     */
+    public void setCenterCubeTransform(float[] transform) {
+        mCenterCubeTransform = transform;
     }
 }

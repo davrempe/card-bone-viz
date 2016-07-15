@@ -64,11 +64,11 @@ public class CameraTextureRenderer implements GLRenderer {
     private SurfaceTexture mSurfaceTexture;
     /** ID of screen texture that holds camera feed */
     private int mScreenTextureID;
-    /** GLUtil instance */
-    private GLUtil glutil;
+    /** GarUtil instance */
+    private GarUtil garutil;
 
     public CameraTextureRenderer(Activity activity) {
-        glutil = new GLUtil(activity.getResources());
+        garutil = new GarUtil(activity.getResources());
     }
 
     /**
@@ -95,20 +95,20 @@ public class CameraTextureRenderer implements GLRenderer {
         int[] textures = new int[1];
         // Generate the texture to where android view will be rendered
         GLES20.glGenTextures(1, textures, 0);
-        glutil.checkGLError("Texture generate");
+        garutil.checkGLError("Texture generate");
         mScreenTextureID = textures[0];
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mScreenTextureID);
-        glutil.checkGLError("Texture bind");
+        garutil.checkGLError("Texture bind");
 
         GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_MIN_FILTER,GL10.GL_NEAREST);
         GLES20.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_MAG_FILTER, GL10.GL_LINEAR);
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_WRAP_S, GL10.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GL10.GL_TEXTURE_WRAP_T, GL10.GL_CLAMP_TO_EDGE);
 
-        int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.cameratex_vert);
-        int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.cameratex_frag);
+        int vertexShader = garutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.cameratex_vert);
+        int fragmentShader = garutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.cameratex_frag);
 
         mCameraTexProgram = GLES20.glCreateProgram();
         GLES20.glAttachShader(mCameraTexProgram, vertexShader);
@@ -124,7 +124,7 @@ public class CameraTextureRenderer implements GLRenderer {
         GLES20.glLinkProgram(mCameraTexProgram);
         GLES20.glUseProgram(mCameraTexProgram);
 
-        glutil.checkGLError("Camera to texture program");
+        garutil.checkGLError("Camera to texture program");
 
     }
 
@@ -156,18 +156,18 @@ public class CameraTextureRenderer implements GLRenderer {
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mScreenTextureID);
-        glutil.checkGLError("binding uniform texture");
+        garutil.checkGLError("binding uniform texture");
 
         // update the camera surface texture with the new image
         mSurfaceTexture.updateTexImage();
 
         // Set the position of the screen
         GLES20.glVertexAttribPointer(mScreenPositionParam, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, mScreenVertBuf);
-        glutil.checkGLError("set screen pos pointer");
+        garutil.checkGLError("set screen pos pointer");
 
         // Set the texture coords for the screen
         GLES20.glVertexAttribPointer(mScreenTextureParam, 2, GLES20.GL_FLOAT, false, 0, mScreenTexBuf);
-        glutil.checkGLError("setting texture attribute pointers");
+        garutil.checkGLError("setting texture attribute pointers");
 
         // Enable vertex arrays
         GLES20.glEnableVertexAttribArray(mScreenPositionParam);
@@ -175,7 +175,7 @@ public class CameraTextureRenderer implements GLRenderer {
 
         // actually draw
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
-        glutil.checkGLError("Drawing camera texture");
+        garutil.checkGLError("Drawing camera texture");
 
         // free texture
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0);

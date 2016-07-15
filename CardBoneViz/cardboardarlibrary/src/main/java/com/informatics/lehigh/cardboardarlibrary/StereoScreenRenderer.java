@@ -11,7 +11,6 @@ import com.google.vr.sdk.base.HeadTransform;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
 
 public class StereoScreenRenderer implements GLRenderer {
 
@@ -24,7 +23,7 @@ public class StereoScreenRenderer implements GLRenderer {
     private static final int COORDS_PER_VERTEX = 3;
     /** Number of bytes in a float */
     private static final int BYTES_PER_FLOAT = 4;
-    public static final float SCREEN_DEPTH = -3.2f;
+    public static final float SCREEN_DEPTH = -2.7f;
     /** Vertices making up screen (just a plane of 2 triangles) */
     private final float[] SCREEN_COORDS = new float[] {
             -1.78f, 1.0f, SCREEN_DEPTH,
@@ -71,8 +70,8 @@ public class StereoScreenRenderer implements GLRenderer {
     private int mScreenCameraTextureID;
     /** ID of screen texture that holds the 3d objects screne */
     private int mScreenObjectsTextureID;
-    /** GLUtil instance */
-    private GLUtil glutil;
+    /** GarUtil instance */
+    private GarUtil garutil;
 
     /**
      * Creates a new StereoScreenRenderer.
@@ -81,7 +80,7 @@ public class StereoScreenRenderer implements GLRenderer {
     public StereoScreenRenderer(Activity activity) {
         mModelScreen = new float[16];
         mModelViewProjection = new float[16];
-        glutil = new GLUtil(activity.getResources());
+        garutil = new GarUtil(activity.getResources());
     }
 
     @Override
@@ -100,8 +99,8 @@ public class StereoScreenRenderer implements GLRenderer {
         mScreenTexBuf.position(0);
 
         // compile shaders
-        int vertexShader = glutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.screen_vert);
-        int fragmentShader = glutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.screen_frag);
+        int vertexShader = garutil.loadGLShader(GLES20.GL_VERTEX_SHADER, R.raw.screen_vert);
+        int fragmentShader = garutil.loadGLShader(GLES20.GL_FRAGMENT_SHADER, R.raw.screen_frag);
 
         mScreenProgram = GLES20.glCreateProgram();
         GLES20.glAttachShader(mScreenProgram, vertexShader);
@@ -117,13 +116,13 @@ public class StereoScreenRenderer implements GLRenderer {
         GLES20.glLinkProgram(mScreenProgram);
         GLES20.glUseProgram(mScreenProgram);
 
-        glutil.checkGLError("Screen program");
+        garutil.checkGLError("Screen program");
 
         mScreenModelViewProjectionParam = GLES20.glGetUniformLocation(mScreenProgram, "u_MVP");
         mScreenCameraTextureParam = GLES20.glGetUniformLocation(mScreenProgram, "u_cameraTexture");
         mScreenObjectsTextureParam = GLES20.glGetUniformLocation(mScreenProgram, "u_objectsTexture");
 
-        glutil.checkGLError("screen program params");
+        garutil.checkGLError("screen program params");
     }
 
     @Override
@@ -169,29 +168,29 @@ public class StereoScreenRenderer implements GLRenderer {
         Matrix.multiplyMM(mModelViewProjection, 0, perspective, 0, modelView, 0);
 
         GLES20.glUseProgram(mScreenProgram);
-        glutil.checkGLError("using screen program");
+        garutil.checkGLError("using screen program");
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenCameraTextureID);
         GLES20.glUniform1i(mScreenCameraTextureParam, 0);
-        glutil.checkGLError("binding camera texture");
+        garutil.checkGLError("binding camera texture");
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenObjectsTextureID);
         GLES20.glUniform1i(mScreenObjectsTextureParam, 1);
-        glutil.checkGLError("binding objects texture");
+        garutil.checkGLError("binding objects texture");
 
         // Set the position of the screen
         GLES20.glVertexAttribPointer(mScreenPositionParam, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, 0, mScreenVertBuf);
-        glutil.checkGLError("set screen pos pointer");
+        garutil.checkGLError("set screen pos pointer");
 
         // Set the texture coords for the screen
         GLES20.glVertexAttribPointer(mScreenTextureParam, 4, GLES20.GL_FLOAT, false, 0, mScreenTexBuf);
-        glutil.checkGLError("setting texture attribute pointers");
+        garutil.checkGLError("setting texture attribute pointers");
 
         // Set the ModelViewProjection matrix in the shader.
         GLES20.glUniformMatrix4fv(mScreenModelViewProjectionParam, 1, false, mModelViewProjection, 0);
-        glutil.checkGLError("set modelviewprojection uniform");
+        garutil.checkGLError("set modelviewprojection uniform");
 
         // Enable vertex arrays
         GLES20.glEnableVertexAttribArray(mScreenPositionParam);
@@ -199,7 +198,7 @@ public class StereoScreenRenderer implements GLRenderer {
 
         // actually draw
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
-        glutil.checkGLError("Drawing bill");
+        garutil.checkGLError("Drawing bill");
 
         // free texture
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);

@@ -92,6 +92,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     Point mFov;
     /** Physical size of the camera sensor */
     SizeF mSensorSize;
+    /** Calibration coefficient for projection matrix when rendering 3D scene to frame buffer */
+    private float mCalib = 0.6f;
 
     //
     // OpenGL-related members
@@ -108,8 +110,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private int mScreenCameraTextureID;
     /** ID of screen texture that holds overlaid 3D scene */
     private int mScreenObjectsTextureID;
-    /** GLUtil instance */
-    protected GLUtil glutil;
+    /** GarUtil instance */
+    protected GarUtil garutil;
 
     //
     // Renderers
@@ -148,7 +150,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         // Setup OpenGL-related things
         //
         mCamera = new float[16];
-        glutil = new GLUtil(getResources());
+        garutil = new GarUtil(getResources());
 
         // Initialize physical camera-related things
         initializePhysicalCamera();
@@ -258,7 +260,6 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
                 // create SurfaceTexture to store images
                 // (this is called after onSurfaceCreated so texture should be available)
-                // TODO possibly loop until not null in case this doesn't hold
                 mSurfaceTexture = new SurfaceTexture(mCameraTextureID);
                 mSurfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                 mGlSurface = new Surface(mSurfaceTexture);
@@ -387,8 +388,6 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     @Override
     public void onSurfaceCreated(EGLConfig eglConfig) {
         Log.i(TAG, "onSurfaceCreated");
-        // TODO why isn't this changing anything?
-        //GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 
         // We will render both the camera feed and 3D scene to be augmented
         // from the user to different textures using framebuffers. Then
@@ -398,20 +397,19 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         mFboIdCamera = fbos[0];
         mFboIdObjects = fbos[1];
 
-        glutil.checkGLError("generate framebuffers");
+        garutil.checkGLError("generate framebuffers");
 
         int[] textures = new int[2];
         GLES20.glGenTextures(2, textures, 0);
         mScreenCameraTextureID = textures[0];
         mScreenObjectsTextureID = textures[1];
 
-        glutil.checkGLError("generate textures");
+        garutil.checkGLError("generate textures");
 
         //
         // First set up framebuffer for the camera feed texture
         //
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFboIdCamera);
-        // TODO do we need this?
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenCameraTextureID);
         // want same width and height as image form camera
@@ -428,7 +426,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, DEFAULT_FBO_ID);
 
-        glutil.checkGLError("set up camera feed texture");
+        garutil.checkGLError("set up camera feed texture");
 
         //
         // Next set up framebuffer for the 3D objects texture, need depth component
@@ -438,7 +436,6 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         int renderBuffID = renderBufArr[0];
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFboIdObjects);
-        // TODO do we need this?
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mScreenObjectsTextureID);
         // want same width and height as image form camera
@@ -462,7 +459,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, 0);
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, DEFAULT_FBO_ID);
 
-        glutil.checkGLError("set up scene objects texture");
+        garutil.checkGLError("set up scene objects texture");
 
         // Initialize renderers
         camTexRenderer.init();
@@ -473,7 +470,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         screenRenderer.setCameraTexture(mScreenCameraTextureID);
         screenRenderer.setObjectsTexture(mScreenObjectsTextureID);
 
-        glutil.checkGLError("initRenderers");
+        garutil.checkGLError("initRenderers");
 
         // get instrinsic camera parameters from saved calibration
         CameraParameters camParams = new CameraParameters();
@@ -522,7 +519,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         // Build the camera matrix.
         Matrix.setLookAtM(mCamera, 0, 0.0f, 0.0f, CAMERA_Z, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 
-        glutil.checkGLError("onReadyToDraw");
+        garutil.checkGLError("onReadyToDraw");
     }
 
     @Override
@@ -536,8 +533,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
         // Change to camera resolution for scene render
         eye.getViewport().setViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        float calib = 0.6f;
-        eye.getFov().setAngles((float)mFov.x*calib / 2.0f, (float)mFov.x*calib / 2.0f, (float)mFov.y*calib / 2.0f, (float)mFov.y*calib / 2.0f);
+        eye.getFov().setAngles((float)mFov.x*mCalib / 2.0f, (float)mFov.x*mCalib / 2.0f, (float)mFov.y*mCalib / 2.0f, (float)mFov.y*mCalib / 2.0f);
         eye.getViewport().setGLViewport();
         eye.getViewport().setGLScissor();
         eye.setProjectionChanged();
