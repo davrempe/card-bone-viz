@@ -21,6 +21,8 @@ public class MainActivity extends GarActivity {
     private static final String TAG = "MainActivity";
     private static final float PADDING_SIZE = 0.005f;
     private static final float MARKER_SIZE = 0.035f;
+    /**The filepath to the Camera Calibration Data file*/
+    public static final String DATA_FILEPATH = "/CardBoneViz/camCalibData.csv";
 
     //
     // PREFERENCES

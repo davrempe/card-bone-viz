@@ -8,6 +8,9 @@ import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
+import com.informatics.lehigh.cardboneviz.CameraCalibrationActivity;
+import com.informatics.lehigh.cardboneviz.MainActivity;
+
 import org.opencv.core.Mat;
 
 import java.io.File;
@@ -23,7 +26,7 @@ public abstract class CalibrationResult {
     private static final int DISTORTION_COEFFICIENTS_SIZE = 5;
 
     public static void save(Activity activity, Mat cameraMatrix, Mat distortionCoefficients) {
-        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(activity);
+        SharedPreferences sharedPref = activity.getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPref.edit();
 
         double[] cameraMatrixArray = new double[CAMERA_MATRIX_ROWS * CAMERA_MATRIX_COLS];
@@ -46,32 +49,33 @@ public abstract class CalibrationResult {
         Log.i(TAG, "Saved camera matrix: " + cameraMatrix.dump());
         Log.i(TAG, "Saved distortion coefficients: " + distortionCoefficients.dump());
 
-//        File myPath = new File(Environment.getExternalStorageDirectory().toString() + "/camCalib");
-//        File myFile = new File(myPath, "camCalibData.csv");
-//        if (!myPath.exists()) {
-//            myPath.mkdir();
-//        }
-//        try
-//        {
-//            FileWriter fw = new FileWriter(myFile);
-//            PrintWriter pw = new PrintWriter(fw);
-//
-//            Map<String,?> prefsMap = sharedPref.getAll();
-//
-//            for(Map.Entry<String,?> entry : prefsMap.entrySet())
-//            {
-//                pw.println(entry.getKey() + "," + entry.getValue().toString());
-//            }
-//
-//            pw.close();
-//            fw.close();
-//        }
-//        catch (Exception e)
-//        {
-//            // what a terrible failure...
-//            Log.e(TAG, e.getMessage());
-//        }
+        //Write Shared Preferences to File
+        File myFile = new File(Environment.getExternalStorageDirectory().toString() + MainActivity.DATA_FILEPATH);
+        if (!myFile.exists()) {
+            myFile.mkdir();
+        }
+        try
+        {
+            FileWriter fw = new FileWriter(myFile);
+            PrintWriter pw = new PrintWriter(fw);
 
+            Map<String,?> prefsMap = sharedPref.getAll();
+
+            for(Map.Entry<String,?> entry : prefsMap.entrySet())
+            {
+                pw.println(entry.getKey() + "," + entry.getValue().toString());
+            }
+
+            pw.close();
+            fw.close();
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, e.getMessage());
+        }
+
+        Intent intent = new Intent(activity, MainActivity.class);
+        activity.startActivity(intent);
     }
 
     public static boolean tryLoad(Activity activity, Mat cameraMatrix, Mat distortionCoefficients) {

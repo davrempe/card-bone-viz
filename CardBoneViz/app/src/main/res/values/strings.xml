@@ -1,5 +1,13 @@
 <resources>
     <string name="app_name">CardBoneViz</string>
+    <string name="app2_name">CameraCalibration</string>
+    <string name="recalibrationQuestion">Do you want to recalibrate your camera?</string>
+    <string name="directions">Point the camera at the \n
+                              asymmetrical circles grid. \n
+                              (picture located in github repo: \n
+                              https://github.com/davrempe/card-bone-viz) \n
+                              Tap the screen and take around 10 \n
+                              pictures for accurate calibration.</string>
 
     <!-- Camera Calibration Strings -->
     <string name="action_calibrate">Calibrate</string>
