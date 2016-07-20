@@ -87,6 +87,13 @@ public class MainActivity extends GarActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+
+        mUltraTracker.calcAvgFps();
+    }
+
+    @Override
     public void onSurfaceCreated(EGLConfig eglConfig) {
         super.onSurfaceCreated(eglConfig);
         Log.i(TAG, "onSurfaceCreated");

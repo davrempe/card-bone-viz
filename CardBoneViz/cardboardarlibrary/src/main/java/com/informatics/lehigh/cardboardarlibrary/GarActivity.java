@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import es.ava.aruco.CameraParameters;
+import es.ava.aruco.exceptions.CPException;
 
 public abstract class GarActivity extends GvrActivity implements GvrView.StereoRenderer {
 
@@ -60,6 +61,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private static final float Z_FAR = 100.0f;
     /** Need to bind to frame buffer ID 1 to render properly to google vr view for some reason */
     private static final int DEFAULT_FBO_ID = 1;
+    /** The image resolution used for the processing surface */
+    public static final Size PROCESSING_IMG_SIZE = new Size(256, 144);
 
     //
     // Physical camera access related members
@@ -92,8 +95,6 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     Point mFov;
     /** Physical size of the camera sensor */
     SizeF mSensorSize;
-    /** Calibration coefficient for projection matrix when rendering 3D scene to frame buffer */
-    private float mCalib = 0.6f;
 
     //
     // OpenGL-related members
@@ -196,6 +197,10 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
                     break;
                 }
             }
+
+            // now sizes for processing surface
+            // TODO look for proper processing size? Choose lowest 16:9
+            sizes = streamMap.getOutputSizes(ImageFormat.YUV_420_888);
 
             // make sure we found one
             if (mPreviewSize.getHeight() == -1) {
@@ -348,7 +353,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         // this allows StereoScreenRenderer to keep rendering at a high frame rate since
         // the capture waits to finish until the images on the ImageReader stack
         // are all closed.
-        mProcessingReader = ImageReader.newInstance(mPreviewSize.getWidth(), mPreviewSize.getHeight(),
+
+        mProcessingReader = ImageReader.newInstance(PROCESSING_IMG_SIZE.getWidth(), PROCESSING_IMG_SIZE.getHeight(),
                 ImageFormat.YUV_420_888, mProcessingReaderBufferSize);
         mProcessingSurface = mProcessingReader.getSurface();
         ArrayList<Surface> surfList = new ArrayList<Surface>();
@@ -476,6 +482,13 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         CameraParameters camParams = new CameraParameters();
         String externalDir = Environment.getExternalStorageDirectory().toString();
         camParams.readFromFile(externalDir + "/camCalib/camCalibData.csv");
+        // resize to full res since calibrated at 1920x1080
+        camParams.setCamSize(new org.opencv.core.Size(1920, 1080));
+        try {
+            camParams.resize(new org.opencv.core.Size(mPreviewSize.getWidth(), mPreviewSize.getHeight()));
+        } catch (CPException e) {
+            Log.e(TAG, "CAMERA PARAMS NOT VALID");
+        }
         Mat camMat = camParams.getCameraMatrix();
 
         double[] fovx = new double[1];
@@ -533,7 +546,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
 
         // Change to camera resolution for scene render
         eye.getViewport().setViewport(0, 0, mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        eye.getFov().setAngles((float)mFov.x*mCalib / 2.0f, (float)mFov.x*mCalib / 2.0f, (float)mFov.y*mCalib / 2.0f, (float)mFov.y*mCalib / 2.0f);
+        eye.getFov().setAngles((float)mFov.x / 2.0f, (float)mFov.x / 2.0f, (float)mFov.y / 2.0f, (float)mFov.y / 2.0f);
         eye.getViewport().setGLViewport();
         eye.getViewport().setGLScissor();
         eye.setProjectionChanged();
@@ -577,7 +590,6 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
        // Matrix.perspectiveM(perspective, 0, eye.getFov().getTop(), (float)eye.getViewport().width / (float)eye.getViewport().height, Z_NEAR, Z_FAR);
 
         // Now draw actual screen for cardboard viewer
-        // TODO did the eye viewport get changed by changing above?
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);

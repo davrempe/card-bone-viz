@@ -19,14 +19,17 @@ import com.informatics.lehigh.cardboardarlibrary.CubeDetector;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Vector;
 
 import es.ava.aruco.CameraParameters;
+import es.ava.aruco.exceptions.CPException;
 
 /**
  * Class for constantly processing incoming image data in order to track a
@@ -35,6 +38,7 @@ import es.ava.aruco.CameraParameters;
 public class UltrasoundTracker implements Runnable {
 
     private static final String TAG = "UltrasoundTracker";
+    private static final boolean BENCHMARK_TESTING = true;
 
     /** Image reader used to access current camera image */
     private ImageReader mImgReader;
@@ -52,6 +56,8 @@ public class UltrasoundTracker implements Runnable {
     private volatile boolean newMarker = false;
     /** True if there the last frame processed detected a marker */
     private volatile boolean markerDetected = false;
+    /** FPS data for the life of the tracker */
+    private ArrayList<Double> frameRateData = new ArrayList<>();
 
     /**
      * Creates a new UltrasoundTracker
@@ -111,7 +117,32 @@ public class UltrasoundTracker implements Runnable {
 
     @Override
     public void run() {
+        // get instrinsic camera parameters from saved calibration
+        CameraParameters camParams = new CameraParameters();
+        String externalDir = Environment.getExternalStorageDirectory().toString();
+        camParams.readFromFile(externalDir + MainActivity.DATA_FILEPATH);
+
+        // scale camera matrix based on processing resolution
+        // Assume the camera was calibrated at 1920 X 1080
+        camParams.setCamSize(new Size(1920, 1080));
+        try {
+            camParams.resize(new Size(MainActivity.PROCESSING_IMG_SIZE.getWidth(), MainActivity.PROCESSING_IMG_SIZE.getHeight()));
+        } catch (CPException e) {
+            Log.e(TAG, "CAMERA PARAMS NOT VALID");
+        }
+
+
+        // create a cube configuration for our detector cube
+        // we're just using the first 6 marker id's
+        int[] ids = new int[] {1, 2, 3, 4, 5, 6};
+        CubeConfiguration cubeConfig = new CubeConfiguration(ids);
+
         while (running) {
+            long start = 0;
+            if (BENCHMARK_TESTING) {
+                start = System.currentTimeMillis();
+            }
+
             // get the currently captured image
             Image curImg = mImgReader.acquireLatestImage();
             if (curImg != null) {
@@ -123,15 +154,7 @@ public class UltrasoundTracker implements Runnable {
                 CubeDetector cubeDetector = new CubeDetector();
                 Vector<Cube> detectedCubes = new Vector<Cube>();
 
-                // get instrinsic camera parameters from saved calibration
-                CameraParameters camParams = new CameraParameters();
-                String externalDir = Environment.getExternalStorageDirectory().toString();
-                camParams.readFromFile(externalDir + MainActivity.DATA_FILEPATH);
 
-                // create a cube configuration for our detector cube
-                // we're just using the first 6 marker id's
-                int[] ids = new int[] {1, 2, 3, 4, 5, 6};
-                CubeConfiguration cubeConfig = new CubeConfiguration(ids);
                 // now process the image for cubes
                 cubeDetector.detect(rgba, cubeConfig, detectedCubes, camParams, mMarkerSize, mPaddingSize);
                 if (detectedCubes.size() != 0) {
@@ -148,7 +171,29 @@ public class UltrasoundTracker implements Runnable {
                     markerDetected = false;
                 }
 
+                if (BENCHMARK_TESTING) {
+                    // record FPS
+                    long end = System.currentTimeMillis();
+                    long diff = end - start;
+                    double seconds = (double) diff / 1000.0;
+                    double fps = 1.0 / seconds;
+                    frameRateData.add(fps);
+                    Log.i(TAG, "FPS = " + fps);
+                }
             }
+        }
+
+    }
+
+    public void calcAvgFps() {
+        if (BENCHMARK_TESTING) {
+            // find average fps
+            double sum = 0.0;
+            for (double fps : frameRateData) {
+                sum += fps;
+            }
+            double avg = sum / frameRateData.size();
+            Log.i(TAG, "AVERAGE FPS = " + avg);
         }
     }
 

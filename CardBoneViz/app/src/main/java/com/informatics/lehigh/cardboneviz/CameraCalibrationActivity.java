@@ -29,6 +29,7 @@ import android.view.View.OnTouchListener;
 import android.view.WindowManager;
 import android.widget.Toast;
 
+import com.informatics.lehigh.cardboardarlibrary.GarActivity;
 import com.informatics.lehigh.cardboneviz.calibration.CalibrationFrameRender;
 import com.informatics.lehigh.cardboneviz.calibration.CalibrationResult;
 import com.informatics.lehigh.cardboneviz.calibration.CameraCalibrator;
@@ -49,8 +50,8 @@ public class CameraCalibrationActivity extends AppCompatActivity implements Came
     private CameraBridgeViewBase mOpenCvCameraView;
     private CameraCalibrator mCalibrator;
     private OnCameraFrameRender mOnCameraFrameRender;
-    private int mWidth;
-    private int mHeight;
+    private int mWidth; //= GarActivity.PROCESSING_IMG_SIZE.getWidth();
+    private int mHeight; //= GarActivity.PROCESSING_IMG_SIZE.getHeight();
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -248,6 +249,13 @@ public class CameraCalibrationActivity extends AppCompatActivity implements Came
     }
 
     public void onCameraViewStarted(int width, int height) {
+//        // TODO this won't go above 1080p
+//        mOpenCvCameraView.setMaxFrameSize(mWidth, mHeight);
+//
+//        mCalibrator = new CameraCalibrator(mWidth, mHeight);
+//        mOnCameraFrameRender = new OnCameraFrameRender(new CalibrationFrameRender(mCalibrator));
+
+
         if (mWidth != width || mHeight != height) {
             mWidth = width;
             mHeight = height;

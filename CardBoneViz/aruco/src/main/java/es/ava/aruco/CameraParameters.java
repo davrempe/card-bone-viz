@@ -77,9 +77,11 @@ public class CameraParameters {
 		float[] current = new float[9];
 		cameraMatrix.get(0, 0, current);
 		float[] buff = {current[0]*AxFactor, current[1],          current[2]*AxFactor,
-				current[3],          current[4]*AyFactor, current[5],
+				current[3],          current[4]*AyFactor, current[5]*AyFactor,
 				current[6],          current[7],          current[8]};
 		cameraMatrix.put(0, 0, buff);
+
+		camSize = size;
 	}
 
 //Replaced With readFromFile
@@ -156,5 +158,21 @@ public class CameraParameters {
 		} catch (IOException e) {
 			Log.e("IOException: ", e.getMessage());
 		}
+	}
+
+	/**
+	 * Sets the resolution of the image used to obtain these camera parameters.
+	 * @param calibSize
+     */
+	public void setCamSize(Size calibSize) {
+		camSize = calibSize;
+	}
+
+	/**
+	 * Returns the resolution of the iamge used to obtain these camera parameters.
+	 * @return
+     */
+	public Size getCamSize() {
+		return camSize;
 	}
 }
