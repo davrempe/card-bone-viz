@@ -38,7 +38,7 @@ import es.ava.aruco.exceptions.CPException;
 public class UltrasoundTracker implements Runnable {
 
     private static final String TAG = "UltrasoundTracker";
-    private static final boolean BENCHMARK_TESTING = true;
+    public static final boolean BENCHMARK_TESTING = false;
 
     /** Image reader used to access current camera image */
     private ImageReader mImgReader;
@@ -126,7 +126,7 @@ public class UltrasoundTracker implements Runnable {
         // Assume the camera was calibrated at 1920 X 1080
         camParams.setCamSize(new Size(1920, 1080));
         try {
-            camParams.resize(new Size(MainActivity.PROCESSING_IMG_SIZE.getWidth(), MainActivity.PROCESSING_IMG_SIZE.getHeight()));
+            camParams.resize(new Size(mImgReader.getWidth(), mImgReader.getHeight()));
         } catch (CPException e) {
             Log.e(TAG, "CAMERA PARAMS NOT VALID");
         }

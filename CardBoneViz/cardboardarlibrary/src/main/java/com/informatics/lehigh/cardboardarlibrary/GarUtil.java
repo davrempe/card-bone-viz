@@ -229,11 +229,6 @@ public class GarUtil {
         float[] tvecCam = new float[4];
         tvecToCardboardCoords(tvecCam, tvec);
 
-        // TODO
-//        tvecCam[0] = (tvecCam[0] / 800.0f) * 3840.0f;
-//        tvecCam[1] = (tvecCam[1] / 450.0f) * 2160.0f;
-
-
         // adjust z so not too close to camera
         // update x and y accordingly
         // must move away in cardboard -z as well as properly scale so this translation isn't noticed

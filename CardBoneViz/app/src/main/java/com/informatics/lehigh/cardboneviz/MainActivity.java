@@ -2,6 +2,8 @@ package com.informatics.lehigh.cardboneviz;
 
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
+import android.view.Surface;
 
 import com.google.vr.sdk.base.HeadTransform;
 import com.google.vr.sdk.base.Viewport;
@@ -13,6 +15,9 @@ import com.informatics.lehigh.cardboardarlibrary.GarActivity;
 
 import org.opencv.core.Mat;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MainActivity extends GarActivity {
 
     //
@@ -23,6 +28,10 @@ public class MainActivity extends GarActivity {
     private static final float MARKER_SIZE = 0.035f;
     /**The filepath to the Camera Calibration Data file*/
     public static final String DATA_FILEPATH = "/CardBoneViz/camCalibData.csv";
+
+    private static final boolean ACCURACY_TESTING = false;
+    ArrayList<float[]> tvecList;
+    ArrayList<Mat> rvecList;
 
     //
     // PREFERENCES
@@ -54,6 +63,11 @@ public class MainActivity extends GarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        if (ACCURACY_TESTING) {
+            tvecList = new ArrayList<>();
+            rvecList = new ArrayList<>();
+        }
+
         boneRenderer = new BoneRenderer(this);
         axisRenderer = new AxisRenderer(this);
 
@@ -61,6 +75,12 @@ public class MainActivity extends GarActivity {
         mUltraTracker = new UltrasoundTracker(getProcessingReader(), MARKER_SIZE, PADDING_SIZE);
         mTrackingThread = new Thread(mUltraTracker);
         mTrackingThread.start();
+    }
+
+    @Override
+    protected List<Surface> setupCaptureSurfaces() {
+        //this.setProcessingSurfaceResolution(new Size(1280, 720));
+        return super.setupCaptureSurfaces();
     }
 
     @Override
@@ -89,8 +109,13 @@ public class MainActivity extends GarActivity {
     @Override
     protected void onPause() {
         super.onPause();
-
-        mUltraTracker.calcAvgFps();
+        if (ACCURACY_TESTING) {
+            calcTvecDeviation();
+            calcRvecDeviation();
+        }
+        if (mUltraTracker.BENCHMARK_TESTING) {
+            mUltraTracker.calcAvgFps();
+        }
     }
 
     @Override
@@ -125,6 +150,19 @@ public class MainActivity extends GarActivity {
             Mat [] params = mUltraTracker.getMarkerParams();
             tvecMat = params[0];
             rvecMat = params[1];
+
+            if (ACCURACY_TESTING) {
+                if (tvecList.size() < 120) {
+                    // add current tvec for later calculation
+                    float[] cardTvec = new float[4];
+                    GarUtil.tvecToCardboardCoords(cardTvec, tvecMat);
+                    tvecList.add(cardTvec);
+                    rvecList.add(rvecMat);
+                    Log.i(TAG, "COLLECTED T/Rvec FRAME " + tvecList.size());
+                } else {
+                    Log.i(TAG, "FINISHED T/Rvec DATA COLLECTION");
+                }
+            }
 
             Log.d(TAG, "TVEC: (" + tvecMat.get(0, 0)[0] + ", " + tvecMat.get(1, 0)[0] + ", " + tvecMat.get(2, 0)[0] + ")");
 
@@ -195,5 +233,93 @@ public class MainActivity extends GarActivity {
     @Override
     public void onCardboardTrigger() {
         Log.i(TAG, "onCardboardTrigger");
+    }
+
+    private void calcTvecDeviation() {
+        // first need avg
+        float[] sum = {0.0f, 0.0f, 0.0f, 0.0f};
+        for (float[] tvec : tvecList) {
+            sum[0] += tvec[0];
+            sum[1] += tvec[1];
+            sum[2] += tvec[2];
+            sum[3] += tvec[3];
+        }
+        float num = tvecList.size();
+        float[] avg = {sum[0] / num, sum[1] / num, sum[2] / num, sum[3] / num};
+
+        // now calculate standard deviation
+        sum[0] = 0.0f;
+        sum[1] = 0.0f;
+        sum[2] = 0.0f;
+        sum[3] = 0.0f;
+        for (float[] tvec : tvecList) {
+            sum[0] += (tvec[0] - avg[0]) * (tvec[0] - avg[0]);
+            sum[1] += (tvec[1] - avg[1]) * (tvec[1] - avg[1]);
+            sum[2] += (tvec[2] - avg[2]) * (tvec[2] - avg[2]);
+            sum[3] += (tvec[3] - avg[3]) * (tvec[3] - avg[3]);
+        }
+        float[] var = {sum[0] / num, sum[1] / num, sum[2] / num, sum[3] / num};
+        double [] stdDev = {Math.sqrt(var[0]), Math.sqrt(var[1]), Math.sqrt(var[2]), Math.sqrt(var[3])};
+
+        Log.i(TAG, "TVEC STD DEV = (" + stdDev[0] + ", " + stdDev[1] + ", " + stdDev[2] + ", " + stdDev[3] + ")");
+    }
+
+    private void calcRvecDeviation() {
+        ArrayList<double[]> quatList = new ArrayList<>();
+        for (Mat rvec: rvecList) {
+            //Get Angle-Axis Representation
+            double x = rvec.get(0, 0)[0];
+            double y = rvec.get(1, 0)[0];
+            double z = rvec.get(2, 0)[0];
+            double a = Math.sqrt((x * x) + (y * y) + (z * z));
+
+            //Normalize X,Y,Z
+            x /= a;
+            y /= a;
+            z /= a;
+
+            //Get Quaternions
+            double[] quat = new double[4];
+            quat[0] = Math.cos(a / 2);
+            quat[1] = Math.sin(a / 2) * x;
+            quat[2] = Math.sin(a / 2) * y;
+            quat[3] = Math.sin(a / 2) * z;
+            quatList.add(quat);
+        }
+
+        //calculate mean
+        double totalW = 0;
+        double totalX = 0;
+        double totalY = 0;
+        double totalZ = 0;
+
+        for (double[] quatValues : quatList) {
+            totalW += quatValues[0];
+            totalX += quatValues[1];
+            totalY += quatValues[2];
+            totalZ += quatValues[3];
+        }
+        double[] mean = new double[4];
+        mean[0] = totalW / quatList.size();
+        mean[1] = totalX / quatList.size();
+        mean[2] = totalY / quatList.size();
+        mean[3] = totalZ / quatList.size();
+
+        double[] summationVals = {0.0, 0.0, 0.0, 0.0};
+        for (double[] quatValues : quatList) {
+            //find standard deviation for qw
+            summationVals[0] += Math.pow(quatValues[0] - mean[0],2);
+            //find standard deviation for qx
+            summationVals[1] += Math.pow(quatValues[1] - mean[1],2);
+            //find standard deviation for qy
+            summationVals[2] += Math.pow(quatValues[2] - mean[2],2);
+            //find standard deviation for qz
+            summationVals[3] += Math.pow(quatValues[3] - mean[3],2);
+        }
+
+        double[] var = {summationVals[0] / quatList.size(), summationVals[1] / quatList.size(), summationVals[2] / quatList.size(), summationVals[3] / quatList.size()};
+        double [] stdDev = {Math.sqrt(var[0]), Math.sqrt(var[1]), Math.sqrt(var[2]), Math.sqrt(var[3])};
+
+        Log.i(TAG, "RVEC STD DEV = (" + stdDev[0] + ", " + stdDev[1] + ", " + stdDev[2] + ", " + stdDev[3] + ")");
     }
 }

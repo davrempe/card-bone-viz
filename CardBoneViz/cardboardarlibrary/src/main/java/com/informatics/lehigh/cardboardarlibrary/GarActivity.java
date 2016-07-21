@@ -61,8 +61,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private static final float Z_FAR = 100.0f;
     /** Need to bind to frame buffer ID 1 to render properly to google vr view for some reason */
     private static final int DEFAULT_FBO_ID = 1;
-    /** The image resolution used for the processing surface */
-    public static final Size PROCESSING_IMG_SIZE = new Size(256, 144);
+
+    public Size[] AVAILABLE_PROCESSING_SIZES;
 
     //
     // Physical camera access related members
@@ -79,6 +79,8 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
     private CaptureRequest.Builder mPreviewBuilder;
     /** Size of the preview image captured */
     private Size mPreviewSize = new Size(-1, -1);
+    /** Size of the image used for image processing */
+    private Size mProcessingSize = new Size(-1, -1);
     /** Surface texture attached to GL screen */
     private SurfaceTexture mSurfaceTexture;
     /** Callback function for camera capture */
@@ -198,12 +200,27 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
                 }
             }
 
-            // now sizes for processing surface
-            // TODO look for proper processing size? Choose lowest 16:9
-            sizes = streamMap.getOutputSizes(ImageFormat.YUV_420_888);
-
             // make sure we found one
             if (mPreviewSize.getHeight() == -1) {
+                throw new RuntimeException("Camera does not have a 16:9 resolution!");
+            }
+
+            // now sizes for processing surface
+            sizes = streamMap.getOutputSizes(ImageFormat.YUV_420_888);
+            // go through available output sizes and choose lowest res 16:9
+            for (int i = sizes.length - 1; i >= 0; i--) {
+                Size curSize = sizes[i];
+                if (curSize.getWidth() / 16 == curSize.getHeight() / 9) {
+                    mProcessingSize = sizes[i];
+                    break;
+                }
+            }
+
+            // save for later use
+            AVAILABLE_PROCESSING_SIZES = sizes;
+
+            // make sure we found one
+            if (mProcessingSize.getHeight() == -1) {
                 throw new RuntimeException("Camera does not have a 16:9 resolution!");
             }
 
@@ -342,7 +359,9 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
      * To access the default processing ImageReader and Surface, call
      * {@link #getProcessingReader getProcessingReader} and
      * {@link #getProcessingSurface getProcessingSurface}, respectively. To edit the
-     * processing reader buffer size use {@link #setProcessingReaderBufferSize  setProcessingReaderBufferSize}.
+     * processing reader buffer size use {@link #setProcessingReaderBufferSize  setProcessingReaderBufferSize}, and
+     * to change the resolution of the surface used for processing use
+     * {@link #setProcessingSurfaceResolution}.
      * <br></br><br></br>
      * By default, captured images default to auto-focus and white-balance, but
      * this may be changed by using {@link #setCaptureParam setCaptureParam}.
@@ -354,7 +373,7 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
         // the capture waits to finish until the images on the ImageReader stack
         // are all closed.
 
-        mProcessingReader = ImageReader.newInstance(PROCESSING_IMG_SIZE.getWidth(), PROCESSING_IMG_SIZE.getHeight(),
+        mProcessingReader = ImageReader.newInstance(mProcessingSize.getWidth(), mProcessingSize.getHeight(),
                 ImageFormat.YUV_420_888, mProcessingReaderBufferSize);
         mProcessingSurface = mProcessingReader.getSurface();
         ArrayList<Surface> surfList = new ArrayList<Surface>();
@@ -636,15 +655,38 @@ public abstract class GarActivity extends GvrActivity implements GvrView.StereoR
      * Sets the number of images that the ImageReader for image processing
      * is able to hold. A larger number will take up more memory, but allow
      * more time for image processing without affecting the stereo display
-     * frame rate.
+     * frame rate. This method should be called before calling {@link GarActivity#setupCaptureSurfaces()}.
      * @param numImages number of images for the buffer to hold
      */
     public void setProcessingReaderBufferSize(int numImages) {
         mProcessingReaderBufferSize = numImages;
-        // reset image reader and surface
-        mProcessingReader = ImageReader.newInstance(mPreviewSize.getWidth(), mPreviewSize.getHeight(),
-                ImageFormat.YUV_420_888, mProcessingReaderBufferSize);
-        mProcessingSurface = mProcessingReader.getSurface();
+    }
+
+    /**
+     * Sets the resolution that the ImageReader used for image processing will
+     * receive the feed from the back facing camera. The default is set to the
+     * lowest available 16:9 resolution. The new given resolution must be
+     * one of the available resolution list in {@link #AVAILABLE_PROCESSING_SIZES AVAILABLE_PROCESSING_SIZES}
+     * and have a 16:9 aspect ratio. This method must be called before {@link #onCreate}.
+     * @param processingResolution The pixel size of the image to use fro processing.
+     */
+    public void setProcessingSurfaceResolution(Size processingResolution) {
+        // check if given resolution is valid
+        boolean valid = false;
+        for (int i = 0; i < AVAILABLE_PROCESSING_SIZES.length; i++) {
+            if (processingResolution.equals(AVAILABLE_PROCESSING_SIZES[i])) {
+                if (processingResolution.getWidth() / 16 == processingResolution.getHeight() / 9) {
+                    valid = true;
+                }
+            }
+        }
+
+        if (!valid) {
+            throw new IllegalArgumentException("The given size is not an available one or not 16:9!");
+        }
+
+        // update resolution
+        mProcessingSize = processingResolution;
     }
 
     /**
