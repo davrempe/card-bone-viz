@@ -1,1 +1,13 @@
-include ':app', ':gvr-base', ':gvr-common', ':cardboardarlibrary', ':aruco', ':min3drotation', ':openCVLibrary2411'
+include ':app'
+include ':gvr-base'
+project (":gvr-base").projectDir = new File("../cardboardAR-lib/gvr-base")
+include ':gvr-common'
+project (":gvr-common").projectDir = new File("../cardboardAR-lib/gvr-common")
+include ':openCVLibrary2411'
+project (":openCVLibrary2411").projectDir = new File("../cardboardAR-lib/openCVLibrary2411")
+include ':min3drotation'
+project (":min3drotation").projectDir = new File("../cardboardAR-lib/min3drotation")
+include ':aruco'
+project (":aruco").projectDir = new File("../cardboardAR-lib/aruco")
+include ':cardboardarlibrary'
+project (":cardboardarlibrary").projectDir = new File("../cardboardAR-lib/cardboardarlibrary")
